@@ -1,0 +1,37 @@
+int main()
+{
+    int choice;
+
+    while(1)
+    {
+        printf("1. Login as student\n");
+        printf("2. Login as faculty\n");
+        printf("3. Login as admin\n");
+        printf("4. Forgot password\n");
+        printf("5. Exit\n");
+
+        scanf("%d",&choice);
+
+        switch(choice)
+        {
+            case 1:
+                studentLogin();
+                break;
+
+            case 2:
+                facultyLogin();
+                break;
+
+            case 3:
+                adminLogin();
+                break;
+
+            case 4:
+                forgotPassword();
+                break;
+
+            case 5:
+                return 0;
+        }
+    }
+}
