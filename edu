@@ -1,37 +1,1773 @@
-int main()
-{
-    int choice;
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <time.h>
+#include <stdbool.h>
+#include <stdarg.h>
 
-    while(1)
-    {
+// ================ DEFINES ================
+#define MAX_STUDENTS 1000
+#define MAX_FACULTY 100
+#define MAX_COURSES 200
+#define MAX_OFFERINGS 500
+#define MAX_ENROLLMENTS 50
+#define MAX_STR 200
+#define MAX_SEMESTER 10
+
+// ================ STRUCTURES ================
+
+typedef struct {
+    char student_id[20];
+    char username[50];
+    char password[50];
+    char first_name[50];
+    char last_name[50];
+    char national_id[20];
+    char major[50];
+    char entry_year[10];
+    char level[20];
+    char advisor[50];
+    char faculty[50];
+    char birthplace[100];
+    char first_school[100];
+    char first_book[100];
+    char first_bicycle_color[50];
+    char phd_title[200];
+    char phd_abstract[500];
+    int phd_citations;
+    struct {
+        char offering_id[10];
+        float grade;
+    } enrollments[MAX_ENROLLMENTS];
+    int enrollment_count;
+} Student;
+
+typedef struct {
+    char faculty_id[20];
+    char username[50];
+    char password[50];
+    char first_name[50];
+    char last_name[50];
+    char national_id[20];
+    char department[50];
+    char faculty_name[50];
+    char title[50];
+} Faculty;
+
+typedef struct {
+    char course_id[10];
+    char course_name[100];
+    int units;
+    char prerequisites[100];
+    char level[20];
+    char department[50];
+    char faculty_name[50];
+} Course;
+
+typedef struct {
+    char offering_id[10];
+    char course_id[10];
+    char faculty_id[20];
+    char semester[10];
+    int capacity;
+    int enrolled_count;
+    char location[100];
+    char status[20];
+    char student_ids[100][20];
+    float grades[100];
+} Offering;
+
+// ================ GLOBAL VARIABLES ================
+
+Student students[MAX_STUDENTS];
+int student_count = 0;
+Faculty faculties[MAX_FACULTY];
+int faculty_count = 0;
+Course courses[MAX_COURSES];
+int course_count = 0;
+Offering offerings[MAX_OFFERINGS];
+int offering_count = 0;
+
+// Calendar
+typedef struct {
+    int offering_enabled;
+    int unit_selection_enabled;
+    int class_exam_enabled;
+    int grade_recording_enabled;
+    int current_phase;
+} Calendar;
+
+Calendar calendar = {0, 0, 0, 0, -1};
+
+// ================ UTILITY FUNCTIONS ================
+
+void clear_input() {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF) {}
+}
+
+void get_input(char* prompt, char* buffer, int size) {
+    printf("%s", prompt);
+    fgets(buffer, size, stdin);
+    buffer[strcspn(buffer, "\n")] = '\0';
+}
+
+int get_int(char* prompt, ...) {
+    char input[MAX_STR];
+    va_list args;
+    va_start(args, prompt);
+    vprintf(prompt, args);
+    va_end(args);
+    fgets(input, MAX_STR, stdin);
+    input[strcspn(input, "\n")] = '\0';
+    return atoi(input);
+}
+
+void wait_for_key() {
+    printf("Press any key to continue...");
+    getchar();
+    clear_input();
+}
+
+void print_header() {
+    printf("\n========================================\n");
+    printf("    EDU SYSTEM - Simplified\n");
+    printf("========================================\n");
+}
+
+// ================ STORAGE FUNCTIONS ================
+
+void load_students() {
+    FILE* f = fopen("students.json", "r");
+    if (!f) {
+        student_count = 0;
+        
+        strcpy(students[0].student_id, "404123456");
+        strcpy(students[0].username, "404123456");
+        strcpy(students[0].password, "123456");
+        strcpy(students[0].first_name, "Ali");
+        strcpy(students[0].last_name, "Rezaei");
+        strcpy(students[0].national_id, "1234567890");
+        strcpy(students[0].major, "Computer Engineering");
+        strcpy(students[0].entry_year, "1404");
+        strcpy(students[0].level, "BSc");
+        strcpy(students[0].advisor, "Dr. Karimi");
+        strcpy(students[0].faculty, "Computer Engineering");
+        strcpy(students[0].birthplace, "Karaj");
+        strcpy(students[0].first_school, "Shahid Beheshti");
+        strcpy(students[0].first_book, "Anne Shirley");
+        strcpy(students[0].first_bicycle_color, "White");
+        students[0].enrollment_count = 0;
+        students[0].phd_citations = 0;
+        
+        strcpy(students[1].student_id, "404123457");
+        strcpy(students[1].username, "404123457");
+        strcpy(students[1].password, "123456");
+        strcpy(students[1].first_name, "Sara");
+        strcpy(students[1].last_name, "Mohammadi");
+        strcpy(students[1].national_id, "1234567891");
+        strcpy(students[1].major, "Computer Engineering");
+        strcpy(students[1].entry_year, "1404");
+        strcpy(students[1].level, "BSc");
+        strcpy(students[1].advisor, "Dr. Karimi");
+        strcpy(students[1].faculty, "Computer Engineering");
+        strcpy(students[1].birthplace, "Tehran");
+        strcpy(students[1].first_school, "Hafez");
+        strcpy(students[1].first_book, "Golestan");
+        strcpy(students[1].first_bicycle_color, "Red");
+        students[1].enrollment_count = 0;
+        students[1].phd_citations = 0;
+        student_count = 2;
+        
+        save_students();
+        return;
+    }
+    
+    char line[1024];
+    fgets(line, sizeof(line), f);
+    sscanf(line, "%d", &student_count);
+    
+    for (int i = 0; i < student_count; i++) {
+        fgets(line, sizeof(line), f);
+        char* token = strtok(line, ",");
+        int field = 0;
+        while (token && field < 15) {
+            switch(field) {
+                case 0: strcpy(students[i].student_id, token); break;
+                case 1: strcpy(students[i].username, token); break;
+                case 2: strcpy(students[i].password, token); break;
+                case 3: strcpy(students[i].first_name, token); break;
+                case 4: strcpy(students[i].last_name, token); break;
+                case 5: strcpy(students[i].national_id, token); break;
+                case 6: strcpy(students[i].major, token); break;
+                case 7: strcpy(students[i].entry_year, token); break;
+                case 8: strcpy(students[i].level, token); break;
+                case 9: strcpy(students[i].advisor, token); break;
+                case 10: strcpy(students[i].faculty, token); break;
+                case 11: strcpy(students[i].birthplace, token); break;
+                case 12: strcpy(students[i].first_school, token); break;
+                case 13: strcpy(students[i].first_book, token); break;
+                case 14: strcpy(students[i].first_bicycle_color, token); 
+                         token[strcspn(token, "\n")] = '\0'; break;
+            }
+            token = strtok(NULL, ",");
+            field++;
+        }
+        students[i].enrollment_count = 0;
+        students[i].phd_citations = 0;
+    }
+    fclose(f);
+}
+
+void save_students() {
+    FILE* f = fopen("students.json", "w");
+    fprintf(f, "%d\n", student_count);
+    for (int i = 0; i < student_count; i++) {
+        fprintf(f, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+            students[i].student_id,
+            students[i].username,
+            students[i].password,
+            students[i].first_name,
+            students[i].last_name,
+            students[i].national_id,
+            students[i].major,
+            students[i].entry_year,
+            students[i].level,
+            students[i].advisor,
+            students[i].faculty,
+            students[i].birthplace,
+            students[i].first_school,
+            students[i].first_book,
+            students[i].first_bicycle_color);
+    }
+    fclose(f);
+}
+
+void load_faculty() {
+    FILE* f = fopen("faculty.json", "r");
+    if (!f) {
+        faculty_count = 0;
+        
+        strcpy(faculties[0].faculty_id, "FCS001");
+        strcpy(faculties[0].username, "dr_karimi");
+        strcpy(faculties[0].password, "karimi123");
+        strcpy(faculties[0].first_name, "Hasan");
+        strcpy(faculties[0].last_name, "Karimi");
+        strcpy(faculties[0].national_id, "9876543210");
+        strcpy(faculties[0].department, "Computer Engineering");
+        strcpy(faculties[0].faculty_name, "Computer Engineering");
+        strcpy(faculties[0].title, "Dr.");
+        faculty_count = 1;
+        
+        save_faculty();
+        return;
+    }
+    
+    fscanf(f, "%d\n", &faculty_count);
+    for (int i = 0; i < faculty_count; i++) {
+        fscanf(f, "%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^\n]\n",
+            faculties[i].faculty_id,
+            faculties[i].username,
+            faculties[i].password,
+            faculties[i].first_name,
+            faculties[i].last_name,
+            faculties[i].national_id,
+            faculties[i].department,
+            faculties[i].faculty_name,
+            faculties[i].title);
+    }
+    fclose(f);
+}
+
+void save_faculty() {
+    FILE* f = fopen("faculty.json", "w");
+    fprintf(f, "%d\n", faculty_count);
+    for (int i = 0; i < faculty_count; i++) {
+        fprintf(f, "%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+            faculties[i].faculty_id,
+            faculties[i].username,
+            faculties[i].password,
+            faculties[i].first_name,
+            faculties[i].last_name,
+            faculties[i].national_id,
+            faculties[i].department,
+            faculties[i].faculty_name,
+            faculties[i].title);
+    }
+    fclose(f);
+}
+
+void load_courses() {
+    FILE* f = fopen("courses.json", "r");
+    if (!f) {
+        course_count = 0;
+        
+        strcpy(courses[0].course_id, "CS101");
+        strcpy(courses[0].course_name, "Introduction to Programming");
+        courses[0].units = 3;
+        strcpy(courses[0].prerequisites, "None");
+        strcpy(courses[0].level, "BSc");
+        strcpy(courses[0].department, "Computer Engineering");
+        strcpy(courses[0].faculty_name, "Computer Engineering");
+        
+        strcpy(courses[1].course_id, "CS201");
+        strcpy(courses[1].course_name, "Data Structures");
+        courses[1].units = 3;
+        strcpy(courses[1].prerequisites, "CS101");
+        strcpy(courses[1].level, "BSc");
+        strcpy(courses[1].department, "Computer Engineering");
+        strcpy(courses[1].faculty_name, "Computer Engineering");
+        
+        strcpy(courses[2].course_id, "CS301");
+        strcpy(courses[2].course_name, "Database Systems");
+        courses[2].units = 3;
+        strcpy(courses[2].prerequisites, "CS201");
+        strcpy(courses[2].level, "BSc");
+        strcpy(courses[2].department, "Computer Engineering");
+        strcpy(courses[2].faculty_name, "Computer Engineering");
+        
+        strcpy(courses[3].course_id, "CS401");
+        strcpy(courses[3].course_name, "Software Engineering");
+        courses[3].units = 3;
+        strcpy(courses[3].prerequisites, "CS301");
+        strcpy(courses[3].level, "BSc");
+        strcpy(courses[3].department, "Computer Engineering");
+        strcpy(courses[3].faculty_name, "Computer Engineering");
+        
+        course_count = 4;
+        save_courses();
+        return;
+    }
+    
+    fscanf(f, "%d\n", &course_count);
+    for (int i = 0; i < course_count; i++) {
+        fscanf(f, "%[^,],%[^,],%d,%[^,],%[^,],%[^,],%[^\n]\n",
+            courses[i].course_id,
+            courses[i].course_name,
+            &courses[i].units,
+            courses[i].prerequisites,
+            courses[i].level,
+            courses[i].department,
+            courses[i].faculty_name);
+    }
+    fclose(f);
+}
+
+void save_courses() {
+    FILE* f = fopen("courses.json", "w");
+    fprintf(f, "%d\n", course_count);
+    for (int i = 0; i < course_count; i++) {
+        fprintf(f, "%s,%s,%d,%s,%s,%s,%s\n",
+            courses[i].course_id,
+            courses[i].course_name,
+            courses[i].units,
+            courses[i].prerequisites,
+            courses[i].level,
+            courses[i].department,
+            courses[i].faculty_name);
+    }
+    fclose(f);
+}
+
+void load_offerings() {
+    FILE* f = fopen("offerings.json", "r");
+    if (!f) {
+        offering_count = 0;
+        
+        // Create some default offerings
+        strcpy(offerings[0].offering_id, "O1");
+        strcpy(offerings[0].course_id, "CS101");
+        strcpy(offerings[0].faculty_id, "FCS001");
+        strcpy(offerings[0].semester, "14041");
+        offerings[0].capacity = 40;
+        offerings[0].enrolled_count = 0;
+        strcpy(offerings[0].location, "Room 201");
+        strcpy(offerings[0].status, "approved");
+        
+        strcpy(offerings[1].offering_id, "O2");
+        strcpy(offerings[1].course_id, "CS201");
+        strcpy(offerings[1].faculty_id, "FCS001");
+        strcpy(offerings[1].semester, "14041");
+        offerings[1].capacity = 35;
+        offerings[1].enrolled_count = 0;
+        strcpy(offerings[1].location, "Room 203");
+        strcpy(offerings[1].status, "approved");
+        
+        offering_count = 2;
+        save_offerings();
+        return;
+    }
+    
+    fscanf(f, "%d\n", &offering_count);
+    for (int i = 0; i < offering_count; i++) {
+        fscanf(f, "%[^,],%[^,],%[^,],%[^,],%d,%d,%[^,],%[^\n]\n",
+            offerings[i].offering_id,
+            offerings[i].course_id,
+            offerings[i].faculty_id,
+            offerings[i].semester,
+            &offerings[i].capacity,
+            &offerings[i].enrolled_count,
+            offerings[i].location,
+            offerings[i].status);
+    }
+    fclose(f);
+}
+
+void save_offerings() {
+    FILE* f = fopen("offerings.json", "w");
+    fprintf(f, "%d\n", offering_count);
+    for (int i = 0; i < offering_count; i++) {
+        fprintf(f, "%s,%s,%s,%s,%d,%d,%s,%s\n",
+            offerings[i].offering_id,
+            offerings[i].course_id,
+            offerings[i].faculty_id,
+            offerings[i].semester,
+            offerings[i].capacity,
+            offerings[i].enrolled_count,
+            offerings[i].location,
+            offerings[i].status);
+    }
+    fclose(f);
+}
+
+// ================ FIND FUNCTIONS ================
+
+Student* find_student_by_username(char* username) {
+    load_students();
+    for (int i = 0; i < student_count; i++) {
+        if (strcmp(students[i].username, username) == 0) {
+            return &students[i];
+        }
+    }
+    return NULL;
+}
+
+Student* find_student_by_id(char* id) {
+    load_students();
+    for (int i = 0; i < student_count; i++) {
+        if (strcmp(students[i].student_id, id) == 0) {
+            return &students[i];
+        }
+    }
+    return NULL;
+}
+
+Faculty* find_faculty_by_username(char* username) {
+    load_faculty();
+    for (int i = 0; i < faculty_count; i++) {
+        if (strcmp(faculties[i].username, username) == 0) {
+            return &faculties[i];
+        }
+    }
+    return NULL;
+}
+
+Faculty* find_faculty_by_id(char* id) {
+    load_faculty();
+    for (int i = 0; i < faculty_count; i++) {
+        if (strcmp(faculties[i].faculty_id, id) == 0) {
+            return &faculties[i];
+        }
+    }
+    return NULL;
+}
+
+Course* find_course(char* course_id) {
+    load_courses();
+    for (int i = 0; i < course_count; i++) {
+        if (strcmp(courses[i].course_id, course_id) == 0) {
+            return &courses[i];
+        }
+    }
+    return NULL;
+}
+
+Offering* find_offering(char* offering_id) {
+    load_offerings();
+    for (int i = 0; i < offering_count; i++) {
+        if (strcmp(offerings[i].offering_id, offering_id) == 0) {
+            return &offerings[i];
+        }
+    }
+    return NULL;
+}
+
+// ================ CALENDAR FUNCTIONS ================
+
+void print_calendar() {
+    printf("\n1. offering: %s\n", calendar.offering_enabled ? "enabled" : "disabled");
+    printf("2. unit selection: %s\n", calendar.unit_selection_enabled ? "enabled" : "disabled");
+    printf("3. class & exams: %s\n", calendar.class_exam_enabled ? "enabled" : "disabled");
+    printf("4. grade recording: %s\n", calendar.grade_recording_enabled ? "enabled" : "disabled");
+}
+
+void trigger_time(int phase) {
+    if (phase == 1) {
+        if (calendar.unit_selection_enabled || calendar.class_exam_enabled || calendar.grade_recording_enabled) {
+            printf("Cannot enable offering while later phases are active!\n");
+            return;
+        }
+        calendar.offering_enabled = !calendar.offering_enabled;
+        if (calendar.offering_enabled) {
+            calendar.unit_selection_enabled = 0;
+            calendar.class_exam_enabled = 0;
+            calendar.grade_recording_enabled = 0;
+            calendar.current_phase = 0;
+        }
+    } else if (phase == 2) {
+        if (!calendar.offering_enabled && !calendar.unit_selection_enabled) {
+            printf("Cannot enable unit selection before offering!\n");
+            return;
+        }
+        if (calendar.class_exam_enabled || calendar.grade_recording_enabled) {
+            printf("Cannot enable unit selection while later phases are active!\n");
+            return;
+        }
+        calendar.unit_selection_enabled = !calendar.unit_selection_enabled;
+        if (calendar.unit_selection_enabled) {
+            calendar.class_exam_enabled = 0;
+            calendar.grade_recording_enabled = 0;
+            calendar.current_phase = 1;
+        }
+    } else if (phase == 3) {
+        if (!calendar.unit_selection_enabled && !calendar.class_exam_enabled) {
+            printf("Cannot enable class/exam before unit selection!\n");
+            return;
+        }
+        if (calendar.grade_recording_enabled) {
+            printf("Cannot enable class/exam while grade recording is active!\n");
+            return;
+        }
+        calendar.class_exam_enabled = !calendar.class_exam_enabled;
+        if (calendar.class_exam_enabled) {
+            calendar.grade_recording_enabled = 0;
+            calendar.current_phase = 2;
+        }
+    } else if (phase == 4) {
+        if (!calendar.class_exam_enabled && !calendar.grade_recording_enabled) {
+            printf("Cannot enable grade recording before class/exam!\n");
+            return;
+        }
+        calendar.grade_recording_enabled = !calendar.grade_recording_enabled;
+        if (calendar.grade_recording_enabled) {
+            calendar.current_phase = 3;
+        }
+    }
+    printf("Phase toggled.\n");
+}
+
+int is_offering_time() { return calendar.offering_enabled; }
+int is_unit_selection_time() { return calendar.unit_selection_enabled; }
+int is_class_exam_time() { return calendar.class_exam_enabled; }
+int is_grade_recording_time() { return calendar.grade_recording_enabled; }
+
+// ================ ADMIN FUNCTIONS ================
+
+void admin_calendar() {
+    int option;
+    do {
+        print_calendar();
+        printf("5. go to main menu\n");
+        printf("Enter a time to trigger: ");
+        option = get_int("");
+        if (option >= 1 && option <= 4) {
+            trigger_time(option);
+        }
+    } while(option != 5);
+}
+
+void admin_students() {
+    int option;
+    do {
+        printf("\n1. students list\n");
+        printf("2. register student(s)\n");
+        printf("3. remove student(s)\n");
+        printf("0. Go back\n");
+        printf("Enter an option: ");
+        option = get_int("");
+        
+        if (option == 1) {
+            load_students();
+            printf("\nSearch students (enter keyword, or 'all' for all): ");
+            char keyword[50];
+            get_input("", keyword, 50);
+            
+            printf("\n%-12s | %-15s | %-15s | %-15s | %-10s | %-15s\n", 
+                "Student ID", "First Name", "Last Name", "Major", "Level", "Faculty");
+            printf("--------------------------------------------------------------------------------\n");
+            
+            for (int i = 0; i < student_count; i++) {
+                if (strcmp(keyword, "all") == 0 || 
+                    strstr(students[i].student_id, keyword) ||
+                    strstr(students[i].first_name, keyword) ||
+                    strstr(students[i].last_name, keyword) ||
+                    strstr(students[i].major, keyword) ||
+                    strstr(students[i].faculty, keyword)) {
+                    
+                    printf("%-12s | %-15s | %-15s | %-15s | %-10s | %-15s\n",
+                        students[i].student_id,
+                        students[i].first_name,
+                        students[i].last_name,
+                        students[i].major,
+                        students[i].level,
+                        students[i].faculty);
+                }
+            }
+            wait_for_key();
+        }
+        else if (option == 2) {
+            printf("\n1. Register one student\n");
+            printf("2. Register a group of students (import a file)\n");
+            int sub = get_int("Enter an option: ");
+            
+            if (sub == 1) {
+                load_students();
+                Student s;
+                printf("\nEnter student details:\n");
+                get_input("Student ID: ", s.student_id, 20);
+                get_input("First name: ", s.first_name, 50);
+                get_input("Last name: ", s.last_name, 50);
+                get_input("National ID: ", s.national_id, 20);
+                get_input("Major: ", s.major, 50);
+                get_input("Entry year: ", s.entry_year, 10);
+                get_input("Level (BSc/MSc/PhD): ", s.level, 20);
+                get_input("Advisor: ", s.advisor, 50);
+                get_input("Faculty: ", s.faculty, 50);
+                get_input("Birthplace: ", s.birthplace, 100);
+                get_input("First school: ", s.first_school, 100);
+                get_input("First book: ", s.first_book, 100);
+                get_input("First bicycle color: ", s.first_bicycle_color, 50);
+                
+                strcpy(s.username, s.student_id);
+                strcpy(s.password, s.student_id);
+                s.enrollment_count = 0;
+                s.phd_citations = 0;
+                
+                students[student_count++] = s;
+                save_students();
+                printf("Student registered successfully!\n");
+            }
+            else if (sub == 2) {
+                char filename[100];
+                get_input("Enter filename (e.g., students.csv): ", filename, 100);
+                
+                FILE* f = fopen(filename, "r");
+                if (!f) {
+                    printf("File not found!\n");
+                    wait_for_key();
+                    continue;
+                }
+                
+                load_students();
+                char line[1024];
+                int added = 0;
+                
+                fgets(line, sizeof(line), f);
+                
+                while (fgets(line, sizeof(line), f)) {
+                    Student s;
+                    char* token = strtok(line, ",");
+                    int field = 0;
+                    while (token && field < 13) {
+                        switch(field) {
+                            case 0: strcpy(s.student_id, token); break;
+                            case 1: strcpy(s.first_name, token); break;
+                            case 2: strcpy(s.last_name, token); break;
+                            case 3: strcpy(s.national_id, token); break;
+                            case 4: strcpy(s.major, token); break;
+                            case 5: strcpy(s.entry_year, token); break;
+                            case 6: strcpy(s.level, token); break;
+                            case 7: strcpy(s.advisor, token); break;
+                            case 8: strcpy(s.faculty, token); break;
+                            case 9: strcpy(s.birthplace, token); break;
+                            case 10: strcpy(s.first_school, token); break;
+                            case 11: strcpy(s.first_book, token); break;
+                            case 12: strcpy(s.first_bicycle_color, token); 
+                                     token[strcspn(token, "\n")] = '\0'; break;
+                        }
+                        token = strtok(NULL, ",");
+                        field++;
+                    }
+                    
+                    strcpy(s.username, s.student_id);
+                    strcpy(s.password, s.student_id);
+                    s.enrollment_count = 0;
+                    s.phd_citations = 0;
+                    
+                    students[student_count++] = s;
+                    added++;
+                }
+                
+                fclose(f);
+                save_students();
+                printf("%d students added successfully!\n", added);
+            }
+            wait_for_key();
+        }
+        else if (option == 3) {
+            char id[20];
+            get_input("Enter student id: ", id, 20);
+            load_students();
+            
+            int found = 0;
+            for (int i = 0; i < student_count; i++) {
+                if (strcmp(students[i].student_id, id) == 0) {
+                    found = 1;
+                    printf("|%s | %s | %s | %s\n", 
+                        students[i].first_name, 
+                        students[i].last_name, 
+                        students[i].student_id,
+                        students[i].major);
+                    printf("Remove student? [y/n] ");
+                    char confirm = getchar();
+                    clear_input();
+                    if (confirm == 'y' || confirm == 'Y') {
+                        for (int j = i; j < student_count - 1; j++) {
+                            students[j] = students[j+1];
+                        }
+                        student_count--;
+                        save_students();
+                        printf("Student removed.\n");
+                    }
+                    break;
+                }
+            }
+            if (!found) printf("Student not found.\n");
+            wait_for_key();
+        }
+    } while(option != 0);
+}
+
+void admin_faculty() {
+    int option;
+    do {
+        printf("\n1. faculty list\n");
+        printf("2. register faculty\n");
+        printf("3. remove faculty\n");
+        printf("0. Go back\n");
+        printf("Enter an option: ");
+        option = get_int("");
+        
+        if (option == 1) {
+            load_faculty();
+            printf("\n%-12s | %-15s | %-15s | %-15s | %-15s\n", 
+                "Faculty ID", "First Name", "Last Name", "Department", "Title");
+            printf("--------------------------------------------------------------------------------\n");
+            for (int i = 0; i < faculty_count; i++) {
+                printf("%-12s | %-15s | %-15s | %-15s | %-15s\n",
+                    faculties[i].faculty_id,
+                    faculties[i].first_name,
+                    faculties[i].last_name,
+                    faculties[i].department,
+                    faculties[i].title);
+            }
+            wait_for_key();
+        }
+        else if (option == 2) {
+            Faculty f;
+            get_input("Faculty ID: ", f.faculty_id, 20);
+            get_input("Username: ", f.username, 50);
+            get_input("Password: ", f.password, 50);
+            get_input("First name: ", f.first_name, 50);
+            get_input("Last name: ", f.last_name, 50);
+            get_input("National ID: ", f.national_id, 20);
+            get_input("Department: ", f.department, 50);
+            get_input("Faculty: ", f.faculty_name, 50);
+            get_input("Title: ", f.title, 50);
+            faculties[faculty_count++] = f;
+            save_faculty();
+            printf("Faculty registered.\n");
+            wait_for_key();
+        }
+        else if (option == 3) {
+            char id[20];
+            get_input("Enter faculty id: ", id, 20);
+            load_faculty();
+            
+            for (int i = 0; i < faculty_count; i++) {
+                if (strcmp(faculties[i].faculty_id, id) == 0) {
+                    printf("Remove %s %s? [y/n] ", faculties[i].first_name, faculties[i].last_name);
+                    char confirm = getchar();
+                    clear_input();
+                    if (confirm == 'y' || confirm == 'Y') {
+                        for (int j = i; j < faculty_count - 1; j++) {
+                            faculties[j] = faculties[j+1];
+                        }
+                        faculty_count--;
+                        save_faculty();
+                        printf("Faculty removed.\n");
+                    }
+                    break;
+                }
+            }
+            wait_for_key();
+        }
+    } while(option != 0);
+}
+
+void admin_offerings() {
+    int option;
+    do {
+        printf("\n1. Search\n");
+        printf("2. Add student to an offering\n");
+        printf("3. Remove student from an offering\n");
+        printf("4. Add group of offerings (import file)\n");
+        printf("5. Go back\n");
+        printf("Enter an option: ");
+        option = get_int("");
+        
+        if (option == 1) {
+            char semester[10];
+            get_input("Enter semester number (or 'all' for all): ", semester, 10);
+            load_offerings();
+            load_courses();
+            
+            printf("\n%-8s | %-10s | %-30s | %-8s | %-10s | %-10s\n", 
+                "Off ID", "Course ID", "Course Name", "Capacity", "Enrolled", "Status");
+            printf("--------------------------------------------------------------------------------\n");
+            
+            for (int i = 0; i < offering_count; i++) {
+                if (strcmp(semester, "all") == 0 || strcmp(offerings[i].semester, semester) == 0) {
+                    Course* c = find_course(offerings[i].course_id);
+                    printf("%-8s | %-10s | %-30s | %-8d | %-10d | %-10s\n",
+                        offerings[i].offering_id,
+                        offerings[i].course_id,
+                        c ? c->course_name : "Unknown",
+                        offerings[i].capacity,
+                        offerings[i].enrolled_count,
+                        offerings[i].status);
+                }
+            }
+            wait_for_key();
+        }
+        else if (option == 2) {
+            if (!is_unit_selection_time()) {
+                printf("Unit selection is not active!\n");
+                wait_for_key();
+                continue;
+            }
+            
+            char sid[20], oid[10];
+            get_input("Enter student ID: ", sid, 20);
+            get_input("Enter offering ID: ", oid, 10);
+            
+            load_students();
+            load_offerings();
+            
+            Offering* off = find_offering(oid);
+            if (!off) {
+                printf("Offering not found.\n");
+                wait_for_key();
+                continue;
+            }
+            
+            if (off->enrolled_count >= off->capacity) {
+                printf("Course is full! Capacity: %d, Enrolled: %d\n", off->capacity, off->enrolled_count);
+                wait_for_key();
+                continue;
+            }
+            
+            Student* s = find_student_by_id(sid);
+            if (!s) {
+                printf("Student not found.\n");
+                wait_for_key();
+                continue;
+            }
+            
+            for (int i = 0; i < off->enrolled_count; i++) {
+                if (strcmp(off->student_ids[i], sid) == 0) {
+                    printf("Student already enrolled.\n");
+                    wait_for_key();
+                    continue;
+                }
+            }
+            
+            strcpy(off->student_ids[off->enrolled_count], sid);
+            off->grades[off->enrolled_count] = 0;
+            off->enrolled_count++;
+            
+            strcpy(s->enrollments[s->enrollment_count].offering_id, oid);
+            s->enrollments[s->enrollment_count].grade = 0;
+            s->enrollment_count++;
+            
+            save_students();
+            save_offerings();
+            printf("Student enrolled successfully.\n");
+            wait_for_key();
+        }
+        else if (option == 3) {
+            char sid[20], oid[10];
+            get_input("Enter student ID: ", sid, 20);
+            get_input("Enter offering ID: ", oid, 10);
+            
+            load_students();
+            load_offerings();
+            
+            Offering* off = find_offering(oid);
+            if (!off) {
+                printf("Offering not found.\n");
+                wait_for_key();
+                continue;
+            }
+            
+            for (int i = 0; i < off->enrolled_count; i++) {
+                if (strcmp(off->student_ids[i], sid) == 0) {
+                    for (int j = i; j < off->enrolled_count - 1; j++) {
+                        strcpy(off->student_ids[j], off->student_ids[j+1]);
+                        off->grades[j] = off->grades[j+1];
+                    }
+                    off->enrolled_count--;
+                    break;
+                }
+            }
+            
+            Student* s = find_student_by_id(sid);
+            if (s) {
+                for (int i = 0; i < s->enrollment_count; i++) {
+                    if (strcmp(s->enrollments[i].offering_id, oid) == 0) {
+                        for (int j = i; j < s->enrollment_count - 1; j++) {
+                            s->enrollments[j] = s->enrollments[j+1];
+                        }
+                        s->enrollment_count--;
+                        break;
+                    }
+                }
+            }
+            
+            save_students();
+            save_offerings();
+            printf("Student removed.\n");
+            wait_for_key();
+        }
+        else if (option == 4) {
+            char filename[100];
+            get_input("Enter filename (e.g., offerings.csv): ", filename, 100);
+            
+            FILE* f = fopen(filename, "r");
+            if (!f) {
+                printf("File not found!\n");
+                wait_for_key();
+                continue;
+            }
+            
+            load_offerings();
+            char line[1024];
+            int added = 0;
+            
+            fgets(line, sizeof(line), f);
+            
+            while (fgets(line, sizeof(line), f)) {
+                Offering off;
+                char* token = strtok(line, ",");
+                int field = 0;
+                while (token && field < 6) {
+                    switch(field) {
+                        case 0: strcpy(off.course_id, token); break;
+                        case 1: strcpy(off.faculty_id, token); break;
+                        case 2: strcpy(off.semester, token); break;
+                        case 3: off.capacity = atoi(token); break;
+                        case 4: strcpy(off.location, token); break;
+                        case 5: strcpy(off.status, token); 
+                                 token[strcspn(token, "\n")] = '\0'; break;
+                    }
+                    token = strtok(NULL, ",");
+                    field++;
+                }
+                sprintf(off.offering_id, "O%d", offering_count + 1);
+                off.enrolled_count = 0;
+                offerings[offering_count++] = off;
+                added++;
+            }
+            
+            fclose(f);
+            save_offerings();
+            printf("%d offerings added successfully!\n", added);
+            wait_for_key();
+        }
+    } while(option != 5);
+}
+
+void admin_courses() {
+    int option;
+    do {
+        printf("\n1. Search\n");
+        printf("2. Add a course\n");
+        printf("3. Remove a course\n");
+        printf("4. Add group of courses (import file)\n");
+        printf("5. Go back\n");
+        printf("Enter an option: ");
+        option = get_int("");
+        
+        if (option == 1) {
+            load_courses();
+            printf("\n%-8s | %-30s | %-5s | %-15s | %-15s\n", 
+                "ID", "Course Name", "Units", "Level", "Department");
+            printf("--------------------------------------------------------------------------------\n");
+            for (int i = 0; i < course_count; i++) {
+                printf("%-8s | %-30s | %-5d | %-15s | %-15s\n",
+                    courses[i].course_id,
+                    courses[i].course_name,
+                    courses[i].units,
+                    courses[i].level,
+                    courses[i].department);
+            }
+            wait_for_key();
+        }
+        else if (option == 2) {
+            Course c;
+            get_input("Course ID: ", c.course_id, 10);
+            get_input("Course name: ", c.course_name, 100);
+            c.units = get_int("Units: ");
+            get_input("Prerequisites: ", c.prerequisites, 100);
+            get_input("Level: ", c.level, 20);
+            get_input("Department: ", c.department, 50);
+            get_input("Faculty: ", c.faculty_name, 50);
+            load_courses();
+            courses[course_count++] = c;
+            save_courses();
+            printf("Course added.\n");
+            wait_for_key();
+        }
+        else if (option == 3) {
+            char id[10];
+            get_input("Course ID to remove: ", id, 10);
+            load_courses();
+            for (int i = 0; i < course_count; i++) {
+                if (strcmp(courses[i].course_id, id) == 0) {
+                    for (int j = i; j < course_count - 1; j++) {
+                        courses[j] = courses[j+1];
+                    }
+                    course_count--;
+                    save_courses();
+                    printf("Course removed.\n");
+                    break;
+                }
+            }
+            wait_for_key();
+        }
+        else if (option == 4) {
+            char filename[100];
+            get_input("Enter filename (e.g., courses.csv): ", filename, 100);
+            
+            FILE* f = fopen(filename, "r");
+            if (!f) {
+                printf("File not found!\n");
+                wait_for_key();
+                continue;
+            }
+            
+            load_courses();
+            char line[1024];
+            int added = 0;
+            
+            fgets(line, sizeof(line), f);
+            
+            while (fgets(line, sizeof(line), f)) {
+                Course c;
+                char* token = strtok(line, ",");
+                int field = 0;
+                while (token && field < 7) {
+                    switch(field) {
+                        case 0: strcpy(c.course_id, token); break;
+                        case 1: strcpy(c.course_name, token); break;
+                        case 2: c.units = atoi(token); break;
+                        case 3: strcpy(c.prerequisites, token); break;
+                        case 4: strcpy(c.level, token); break;
+                        case 5: strcpy(c.department, token); break;
+                        case 6: strcpy(c.faculty_name, token); 
+                                 token[strcspn(token, "\n")] = '\0'; break;
+                    }
+                    token = strtok(NULL, ",");
+                    field++;
+                }
+                courses[course_count++] = c;
+                added++;
+            }
+            
+            fclose(f);
+            save_courses();
+            printf("%d courses added successfully!\n", added);
+            wait_for_key();
+        }
+    } while(option != 5);
+}
+
+void admin_requests() {
+    printf("\nPending requests:\n");
+    load_offerings();
+    int found = 0;
+    for (int i = 0; i < offering_count; i++) {
+        if (strcmp(offerings[i].status, "pending") == 0) {
+            found = 1;
+            printf("\nRequest #%d\n", i+1);
+            Course* c = find_course(offerings[i].course_id);
+            Faculty* f = find_faculty_by_id(offerings[i].faculty_id);
+            printf("Offering ID: %s\n", offerings[i].offering_id);
+            printf("Course: %s (%s)\n", c ? c->course_name : "Unknown", offerings[i].course_id);
+            printf("Faculty: %s %s\n", f ? f->first_name : "", f ? f->last_name : "");
+            printf("Semester: %s\n", offerings[i].semester);
+            printf("Capacity: %d\n", offerings[i].capacity);
+            printf("1. Approve\n2. Reject\n");
+            int choice = get_int("Enter choice: ");
+            if (choice == 1) {
+                strcpy(offerings[i].status, "approved");
+                printf("Offering approved.\n");
+            } else if (choice == 2) {
+                strcpy(offerings[i].status, "rejected");
+                printf("Offering rejected.\n");
+            }
+            save_offerings();
+        }
+    }
+    if (!found) printf("No pending requests.\n");
+    wait_for_key();
+}
+
+void admin_menu() {
+    int option;
+    do {
+        print_header();
+        printf("1. Calendar\n");
+        printf("2. Students\n");
+        printf("3. Faculty members\n");
+        printf("4. Requests\n");
+        printf("5. Offerings\n");
+        printf("6. Courses\n");
+        printf("7. Log out\n");
+        printf("\nEnter an option: ");
+        option = get_int("");
+        
+        switch(option) {
+            case 1: admin_calendar(); break;
+            case 2: admin_students(); break;
+            case 3: admin_faculty(); break;
+            case 4: admin_requests(); break;
+            case 5: admin_offerings(); break;
+            case 6: admin_courses(); break;
+            case 7: printf("Logging out...\n"); return;
+            default: printf("Invalid option.\n");
+        }
+    } while(1);
+}
+
+// ================ STUDENT FUNCTIONS ================
+
+void student_offerings(Student* student) {
+    int option;
+    do {
+        printf("\n1. Search by semester\n");
+        printf("2. Enroll in course\n");
+        printf("3. Withdraw course\n");
+        printf("4. Go back\n");
+        printf("Enter an option: ");
+        option = get_int("");
+        
+        if (option == 1) {
+            char semester[10];
+            get_input("Enter semester number (e.g., 14041): ", semester, 10);
+            load_offerings();
+            load_courses();
+            
+            printf("\nOfferings for semester %s:\n", semester);
+            printf("%-8s | %-10s | %-30s | %-8s | %-10s\n", 
+                "Off ID", "Course ID", "Course Name", "Capacity", "Status");
+            printf("--------------------------------------------------------------------------------\n");
+            
+            for (int i = 0; i < offering_count; i++) {
+                if (strcmp(offerings[i].semester, semester) == 0 && 
+                    strcmp(offerings[i].status, "approved") == 0) {
+                    Course* c = find_course(offerings[i].course_id);
+                    printf("%-8s | %-10s | %-30s | %-8d | %-10s\n",
+                        offerings[i].offering_id,
+                        offerings[i].course_id,
+                        c ? c->course_name : "Unknown",
+                        offerings[i].capacity - offerings[i].enrolled_count,
+                        offerings[i].status);
+                }
+            }
+            wait_for_key();
+        }
+        else if (option == 2) {
+            if (!is_unit_selection_time()) {
+                printf("Unit selection is not active!\n");
+                wait_for_key();
+                continue;
+            }
+            
+            char oid[10];
+            get_input("Enter offering ID to enroll: ", oid, 10);
+            
+            load_students();
+            load_offerings();
+            
+            Offering* off = find_offering(oid);
+            if (!off) {
+                printf("Offering not found. Available offering IDs are: ");
+                for (int i = 0; i < offering_count; i++) {
+                    if (strcmp(offerings[i].status, "approved") == 0) {
+                        printf("%s ", offerings[i].offering_id);
+                    }
+                }
+                printf("\n");
+                wait_for_key();
+                continue;
+            }
+            
+            if (strcmp(off->status, "approved") != 0) {
+                printf("This offering is not approved yet.\n");
+                wait_for_key();
+                continue;
+            }
+            
+            Course* c = find_course(off->course_id);
+            if (c && strcmp(c->prerequisites, "None") != 0) {
+                int has_prereq = 0;
+                for (int i = 0; i < student->enrollment_count; i++) {
+                    Offering* enrolled_off = find_offering(student->enrollments[i].offering_id);
+                    if (enrolled_off && strcmp(enrolled_off->course_id, c->prerequisites) == 0) {
+                        if (student->enrollments[i].grade >= 10.0) {
+                            has_prereq = 1;
+                            break;
+                        }
+                    }
+                }
+                if (!has_prereq) {
+                    printf("You haven't passed the prerequisite: %s\n", c->prerequisites);
+                    wait_for_key();
+                    continue;
+                }
+            }
+            
+            if (off->enrolled_count >= off->capacity) {
+                printf("Course is full! Capacity: %d, Enrolled: %d\n", off->capacity, off->enrolled_count);
+                wait_for_key();
+                continue;
+            }
+            
+            for (int i = 0; i < off->enrolled_count; i++) {
+                if (strcmp(off->student_ids[i], student->student_id) == 0) {
+                    printf("You are already enrolled in this course.\n");
+                    wait_for_key();
+                    continue;
+                }
+            }
+            
+            strcpy(off->student_ids[off->enrolled_count], student->student_id);
+            off->grades[off->enrolled_count] = 0;
+            off->enrolled_count++;
+            
+            strcpy(student->enrollments[student->enrollment_count].offering_id, oid);
+            student->enrollments[student->enrollment_count].grade = 0;
+            student->enrollment_count++;
+            
+            save_students();
+            save_offerings();
+            printf("Enrolled successfully.\n");
+            wait_for_key();
+        }
+        else if (option == 3) {
+            char oid[10];
+            get_input("Enter offering ID to withdraw: ", oid, 10);
+            
+            load_students();
+            load_offerings();
+            
+            Offering* off = find_offering(oid);
+            if (!off) {
+                printf("Offering not found.\n");
+                wait_for_key();
+                continue;
+            }
+            
+            for (int i = 0; i < off->enrolled_count; i++) {
+                if (strcmp(off->student_ids[i], student->student_id) == 0) {
+                    for (int j = i; j < off->enrolled_count - 1; j++) {
+                        strcpy(off->student_ids[j], off->student_ids[j+1]);
+                        off->grades[j] = off->grades[j+1];
+                    }
+                    off->enrolled_count--;
+                    break;
+                }
+            }
+            
+            for (int i = 0; i < student->enrollment_count; i++) {
+                if (strcmp(student->enrollments[i].offering_id, oid) == 0) {
+                    for (int j = i; j < student->enrollment_count - 1; j++) {
+                        student->enrollments[j] = student->enrollments[j+1];
+                    }
+                    student->enrollment_count--;
+                    break;
+                }
+            }
+            
+            save_students();
+            save_offerings();
+            printf("Withdrawn successfully.\n");
+            wait_for_key();
+        }
+    } while(option != 4);
+}
+
+void student_report_card(Student* student) {
+    char semester[10];
+    get_input("Enter semester number (e.g., 14041): ", semester, 10);
+    
+    load_courses();
+    load_faculty();
+    load_offerings();
+    
+    printf("\nReport card - %s %s - %s\n", student->first_name, student->last_name, semester);
+    printf("| %-20s | %-10s | %-5s | %-6s | %-6s | %-20s |\n", 
+        "Course Name", "Course ID", "Units", "Grade", "Passed", "Instructor");
+    printf("-----------------------------------------------------------------------------------------\n");
+    
+    float total_grade = 0;
+    int total_units = 0;
+    int passed = 0, failed = 0;
+    int enrolled = 0;
+    
+    for (int i = 0; i < student->enrollment_count; i++) {
+        Offering* off = find_offering(student->enrollments[i].offering_id);
+        if (off && strcmp(off->semester, semester) == 0) {
+            Course* c = find_course(off->course_id);
+            Faculty* f = find_faculty_by_id(off->faculty_id);
+            
+            float grade = student->enrollments[i].grade;
+            int is_passed = grade >= 10.0;
+            if (is_passed) passed++;
+            else failed++;
+            enrolled++;
+            
+            printf("| %-20s | %-10s | %-5d | %-6.2f | %-6s | %-20s |\n",
+                c ? c->course_name : "Unknown",
+                c ? c->course_id : "Unknown",
+                c ? c->units : 0,
+                grade,
+                is_passed ? "Yes" : "No",
+                f ? f->title : "");
+            
+            if (c) {
+                total_grade += grade * c->units;
+                total_units += c->units;
+            }
+        }
+    }
+    
+    printf("\nEnrolled courses: %d\n", enrolled);
+    printf("Passed courses: %d\n", passed);
+    printf("Failed courses: %d\n", failed);
+    printf("GPA: %.2f\n", total_units > 0 ? total_grade / total_units : 0);
+    
+    wait_for_key();
+}
+
+void student_menu(Student* student) {
+    int option;
+    do {
+        print_header();
+        printf("Welcome %s %s\n", student->first_name, student->last_name);
+        printf("1. Offerings\n");
+        printf("2. Courses\n");
+        printf("3. Report card\n");
+        printf("4. Log out\n");
+        printf("\nEnter an option: ");
+        option = get_int("");
+        
+        switch(option) {
+            case 1: student_offerings(student); break;
+            case 2: 
+                load_courses();
+                printf("\n%-8s | %-30s | %-5s | %-15s | %-15s\n", 
+                    "ID", "Course Name", "Units", "Level", "Department");
+                printf("--------------------------------------------------------------------------------\n");
+                for (int i = 0; i < course_count; i++) {
+                    printf("%-8s | %-30s | %-5d | %-15s | %-15s\n",
+                        courses[i].course_id,
+                        courses[i].course_name,
+                        courses[i].units,
+                        courses[i].level,
+                        courses[i].department);
+                }
+                wait_for_key();
+                break;
+            case 3: student_report_card(student); break;
+            case 4: printf("Logging out...\n"); return;
+            default: printf("Invalid option.\n");
+        }
+    } while(1);
+}
+
+// ================ FACULTY FUNCTIONS ================
+
+void faculty_offer_course(Faculty* faculty) {
+    if (!is_offering_time()) {
+        printf("Offering is not active!\n");
+        wait_for_key();
+        return;
+    }
+    
+    char course_id[10];
+    get_input("Enter the course id: ", course_id, 10);
+    
+    Course* c = find_course(course_id);
+    if (!c) {
+        printf("Course not found.\n");
+        wait_for_key();
+        return;
+    }
+    
+    printf("\nCourse details:\n");
+    printf("| %-30s | %-10s | %-5d | %-15s | %-15s |\n", 
+        "Name", "ID", "Units", "Level", "Department");
+    printf("--------------------------------------------------------------------------------\n");
+    printf("| %-30s | %-10s | %-5d | %-15s | %-15s |\n",
+        c->course_name, c->course_id, c->units, c->level, c->department);
+    
+    char semester[10];
+    get_input("Enter semester (e.g., 14041): ", semester, 10);
+    int capacity = get_int("Enter the capacity: ");
+    
+    load_offerings();
+    Offering off;
+    sprintf(off.offering_id, "O%d", offering_count + 1);
+    strcpy(off.course_id, course_id);
+    strcpy(off.faculty_id, faculty->faculty_id);
+    strcpy(off.semester, semester);
+    off.capacity = capacity;
+    off.enrolled_count = 0;
+    strcpy(off.location, "Room 201, Science Building");
+    strcpy(off.status, "pending");
+    
+    offerings[offering_count++] = off;
+    save_offerings();
+    
+    printf("Sent request to admin. Waiting for approval.\n");
+    printf("Offering ID: %s\n", off.offering_id);
+    wait_for_key();
+}
+
+void faculty_my_offerings(Faculty* faculty) {
+    char semester[10];
+    get_input("Enter semester number (or 'all' for all): ", semester, 10);
+    
+    load_offerings();
+    load_courses();
+    load_students();
+    
+    // Store offering IDs for lookup
+    char offering_ids[100][10];
+    int id_count = 0;
+    
+    printf("\nMy offerings for semester %s:\n", semester);
+    printf("| %-6s | %-8s | %-30s | %-10s | %-8s | %-10s | %-10s |\n", 
+        "Number", "Off ID", "Course Name", "Course ID", "Capacity", "Enrolled", "Status");
+    printf("-----------------------------------------------------------------------------------------------------\n");
+    
+    for (int i = 0; i < offering_count; i++) {
+        if (strcmp(offerings[i].faculty_id, faculty->faculty_id) == 0) {
+            if (strcmp(semester, "all") == 0 || strcmp(offerings[i].semester, semester) == 0) {
+                Course* c = find_course(offerings[i].course_id);
+                printf("| %-6d | %-8s | %-30s | %-10s | %-8d | %-10d | %-10s |\n",
+                    id_count + 1,
+                    offerings[i].offering_id,
+                    c ? c->course_name : "Unknown",
+                    c ? c->course_id : "Unknown",
+                    offerings[i].capacity,
+                    offerings[i].enrolled_count,
+                    offerings[i].status);
+                
+                strcpy(offering_ids[id_count], offerings[i].offering_id);
+                id_count++;
+            }
+        }
+    }
+    
+    if (id_count == 0) {
+        printf("No offerings found.\n");
+        wait_for_key();
+        return;
+    }
+    
+    int choice = get_int("\n1. Go to offering\n2. Go back\nEnter an option: ");
+    
+    if (choice == 1) {
+        int num = get_int("Enter offering number (1-%d): ", id_count);
+        
+        if (num < 1 || num > id_count) {
+            printf("Invalid number.\n");
+            wait_for_key();
+            return;
+        }
+        
+        char* oid = offering_ids[num - 1];
+        Offering* off = find_offering(oid);
+        
+        if (!off || strcmp(off->faculty_id, faculty->faculty_id) != 0) {
+            printf("Invalid offering.\n");
+            wait_for_key();
+            return;
+        }
+        
+        printf("\n=== Offering Details ===\n");
+        printf("Offering ID: %s\n", off->offering_id);
+        printf("Course ID: %s\n", off->course_id);
+        Course* c = find_course(off->course_id);
+        printf("Course Name: %s\n", c ? c->course_name : "Unknown");
+        printf("Semester: %s\n", off->semester);
+        printf("Capacity: %d, Enrolled: %d\n", off->capacity, off->enrolled_count);
+        printf("Status: %s\n", off->status);
+        
+        printf("\n1. Add capacity\n");
+        printf("2. Record grades\n");
+        printf("3. Remove offering (request)\n");
+        printf("4. Go back\n");
+        int sub = get_int("Enter an option: ");
+        
+        if (sub == 1) {
+            if (strcmp(off->status, "approved") != 0) {
+                printf("Offering is not approved yet.\n");
+                wait_for_key();
+                return;
+            }
+            int extra = get_int("Enter extra capacity: ");
+            off->capacity += extra;
+            save_offerings();
+            printf("Capacity increased to %d.\n", off->capacity);
+            wait_for_key();
+        }
+        else if (sub == 2) {
+            if (!is_grade_recording_time()) {
+                printf("Grade recording is not active!\n");
+                wait_for_key();
+                return;
+            }
+            
+            if (strcmp(off->status, "approved") != 0) {
+                printf("Offering is not approved yet.\n");
+                wait_for_key();
+                return;
+            }
+            
+            load_students();
+            printf("\nRecording grades for offering %s\n", off->offering_id);
+            printf("Number of students enrolled: %d\n", off->enrolled_count);
+            
+            for (int i = 0; i < off->enrolled_count; i++) {
+                Student* s = find_student_by_id(off->student_ids[i]);
+                if (s) {
+                    printf("Student: %s %s (%s)\n", s->first_name, s->last_name, s->student_id);
+                    float grade = (float)get_int("Enter grade (0-20): ");
+                    off->grades[i] = grade;
+                    
+                    for (int j = 0; j < s->enrollment_count; j++) {
+                        if (strcmp(s->enrollments[j].offering_id, off->offering_id) == 0) {
+                            s->enrollments[j].grade = grade;
+                            break;
+                        }
+                    }
+                }
+            }
+            save_students();
+            save_offerings();
+            printf("Grades recorded.\n");
+            wait_for_key();
+        }
+        else if (sub == 3) {
+            if (is_offering_time()) {
+                strcpy(off->status, "pending_removal");
+                save_offerings();
+                printf("Removal request sent to admin for approval.\n");
+            } else {
+                printf("Cannot remove offering outside offering period.\n");
+            }
+            wait_for_key();
+        }
+    }
+}
+
+void faculty_menu(Faculty* faculty) {
+    int option;
+    do {
+        print_header();
+        printf("Welcome %s %s\n", faculty->title, faculty->last_name);
+        printf("1. My offerings\n");
+        printf("2. Offer a course\n");
+        printf("3. Log out\n");
+        printf("\nEnter an option: ");
+        option = get_int("");
+        
+        switch(option) {
+            case 1: faculty_my_offerings(faculty); break;
+            case 2: faculty_offer_course(faculty); break;
+            case 3: printf("Logging out...\n"); return;
+            default: printf("Invalid option.\n");
+        }
+    } while(1);
+}
+
+// ================ AUTHENTICATION ================
+
+void forgot_password() {
+    char username[50];
+    get_input("Enter your username: ", username, 50);
+    
+    Student* s = find_student_by_username(username);
+    if (!s) {
+        printf("Username not found.\n");
+        printf("1. Retry\n2. Go to login menu\n");
+        int choice = get_int("Enter an option: ");
+        if (choice == 1) {
+            forgot_password();
+        }
+        return;
+    }
+    
+    char answer[100];
+    int question = 0;
+    int retry = 0;
+    
+    while (question < 3) {
+        if (question == 0) {
+            printf("Where were you born? ");
+        } else if (question == 1) {
+            printf("What was the title of the first book you read? ");
+        } else {
+            printf("What was the color of your first bicycle? ");
+        }
+        
+        get_input("", answer, 100);
+        
+        int correct = 0;
+        if (question == 0 && strcmp(answer, s->birthplace) == 0) correct = 1;
+        else if (question == 1 && strcmp(answer, s->first_book) == 0) correct = 1;
+        else if (question == 2 && strcmp(answer, s->first_bicycle_color) == 0) correct = 1;
+        
+        if (correct) {
+            question++;
+            retry = 0;
+        } else {
+            printf("Incorrect answer.\n");
+            retry++;
+            if (retry >= 3) {
+                printf("Too many incorrect attempts.\n");
+                return;
+            }
+            printf("1. Retry\n2. Go to login menu\n");
+            int choice = get_int("Enter an option: ");
+            if (choice == 2) {
+                return;
+            }
+        }
+    }
+    
+    printf("Authentication successful.\n");
+    char new_pass[50], confirm[50];
+    
+    while (1) {
+        get_input("Enter your new password: ", new_pass, 50);
+        get_input("Confirm your password: ", confirm, 50);
+        
+        if (strcmp(new_pass, confirm) == 0) {
+            break;
+        } else {
+            printf("Passwords aren't matching.\n");
+            printf("1. Retry\n2. Cancel (go to login menu)\n");
+            int choice = get_int("Enter an option: ");
+            if (choice == 2) {
+                return;
+            }
+        }
+    }
+    
+    strcpy(s->password, new_pass);
+    save_students();
+    printf("Password changed successfully.\n");
+    wait_for_key();
+}
+
+void login() {
+    int option;
+    do {
+        print_header();
         printf("1. Login as student\n");
         printf("2. Login as faculty\n");
         printf("3. Login as admin\n");
         printf("4. Forgot password\n");
         printf("5. Exit\n");
-
-        scanf("%d",&choice);
-
-        switch(choice)
-        {
-            case 1:
-                studentLogin();
-                break;
-
-            case 2:
-                facultyLogin();
-                break;
-
-            case 3:
-                adminLogin();
-                break;
-
-            case 4:
-                forgotPassword();
-                break;
-
-            case 5:
-                return 0;
+        printf("\nEnter an option: ");
+        option = get_int("");
+        
+        if (option == 1 || option == 2 || option == 3) {
+            char username[50], password[50];
+            get_input("Enter your username: ", username, 50);
+            
+            if (option == 3) {
+                if (strcmp(username, "admin") == 0) {
+                    get_input("Enter password: ", password, 50);
+                    if (strcmp(password, "admin123") == 0) {
+                        admin_menu();
+                    } else {
+                        printf("Invalid password.\n");
+                    }
+                } else {
+                    printf("Invalid admin username.\n");
+                }
+                continue;
+            }
+            
+            if (option == 1) {
+                Student* s = find_student_by_username(username);
+                if (!s) {
+                    printf("Username not found.\n");
+                    continue;
+                }
+                get_input("Enter password: ", password, 50);
+                if (strcmp(s->password, password) == 0) {
+                    student_menu(s);
+                } else {
+                    printf("Incorrect password.\n");
+                }
+            } else if (option == 2) {
+                Faculty* f = find_faculty_by_username(username);
+                if (!f) {
+                    printf("Username not found.\n");
+                    continue;
+                }
+                get_input("Enter password: ", password, 50);
+                if (strcmp(f->password, password) == 0) {
+                    faculty_menu(f);
+                } else {
+                    printf("Incorrect password.\n");
+                }
+            }
+        } else if (option == 4) {
+            forgot_password();
+        } else if (option == 5) {
+            printf("Goodbye!\n");
+            break;
+        } else {
+            printf("Invalid option.\n");
         }
-    }
+    } while(1);
+}
+
+// ================ MAIN ================
+
+int main() {
+    srand(time(NULL));
+    
+    load_students();
+    load_faculty();
+    load_courses();
+    load_offerings();
+    
+    // Enable offering for testing
+    calendar.offering_enabled = 1;
+    calendar.unit_selection_enabled = 1;
+    calendar.current_phase = 0;
+    
+    login();
+    
+    return 0;
 }
