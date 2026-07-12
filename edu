@@ -99,6 +99,20 @@ typedef struct {
 } Calendar;
 
 Calendar calendar = {0, 0, 0, 0, -1};
+// ================ FUNCTION PROTOTYPES ================
+
+void save_students();
+void load_students();
+void save_faculty();
+void load_faculty();
+void save_courses();
+void load_courses();
+void save_offerings();
+void load_offerings();
+void admin_menu();
+void student_menu(Student* student);
+void faculty_menu(Faculty* faculty);
+void login();
 
 // ================ UTILITY FUNCTIONS ================
 
