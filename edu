@@ -99,6 +99,7 @@ typedef struct {
 } Calendar;
 
 Calendar calendar = {0, 0, 0, 0, -1};
+
 // ================ FUNCTION PROTOTYPES ================
 
 void save_students();
@@ -389,7 +390,6 @@ void load_offerings() {
     if (!f) {
         offering_count = 0;
         
-        // Create some default offerings
         strcpy(offerings[0].offering_id, "O1");
         strcpy(offerings[0].course_id, "CS101");
         strcpy(offerings[0].faculty_id, "FCS001");
@@ -603,29 +603,59 @@ void admin_students() {
         
         if (option == 1) {
             load_students();
-            printf("\nSearch students (enter keyword, or 'all' for all): ");
-            char keyword[50];
-            get_input("", keyword, 50);
             
             printf("\n%-12s | %-15s | %-15s | %-15s | %-10s | %-15s\n", 
                 "Student ID", "First Name", "Last Name", "Major", "Level", "Faculty");
             printf("--------------------------------------------------------------------------------\n");
             
             for (int i = 0; i < student_count; i++) {
-                if (strcmp(keyword, "all") == 0 || 
-                    strstr(students[i].student_id, keyword) ||
-                    strstr(students[i].first_name, keyword) ||
-                    strstr(students[i].last_name, keyword) ||
-                    strstr(students[i].major, keyword) ||
-                    strstr(students[i].faculty, keyword)) {
-                    
-                    printf("%-12s | %-15s | %-15s | %-15s | %-10s | %-15s\n",
-                        students[i].student_id,
-                        students[i].first_name,
-                        students[i].last_name,
-                        students[i].major,
-                        students[i].level,
-                        students[i].faculty);
+                printf("%-12s | %-15s | %-15s | %-15s | %-10s | %-15s\n",
+                    students[i].student_id,
+                    students[i].first_name,
+                    students[i].last_name,
+                    students[i].major,
+                    students[i].level,
+                    students[i].faculty);
+            }
+            
+            printf("\n1. Search\n");
+            printf("2. Go back\n");
+            int search_opt = get_int("Enter an option: ");
+            
+            if (search_opt == 1) {
+                printf("\nSearch by:\n");
+                printf("1. First Name\n");
+                printf("2. Last Name\n");
+                printf("3. Student ID\n");
+                printf("4. Major\n");
+                printf("Enter option: ");
+                int search_by = get_int("");
+                
+                char keyword[50];
+                get_input("Enter search keyword: ", keyword, 50);
+                
+                printf("\n%-12s | %-15s | %-15s | %-15s | %-10s | %-15s\n", 
+                    "Student ID", "First Name", "Last Name", "Major", "Level", "Faculty");
+                printf("--------------------------------------------------------------------------------\n");
+                
+                for (int i = 0; i < student_count; i++) {
+                    int match = 0;
+                    switch(search_by) {
+                        case 1: if (strstr(students[i].first_name, keyword)) match = 1; break;
+                        case 2: if (strstr(students[i].last_name, keyword)) match = 1; break;
+                        case 3: if (strstr(students[i].student_id, keyword)) match = 1; break;
+                        case 4: if (strstr(students[i].major, keyword)) match = 1; break;
+                        default: match = 1;
+                    }
+                    if (match) {
+                        printf("%-12s | %-15s | %-15s | %-15s | %-10s | %-15s\n",
+                            students[i].student_id,
+                            students[i].first_name,
+                            students[i].last_name,
+                            students[i].major,
+                            students[i].level,
+                            students[i].faculty);
+                    }
                 }
             }
             wait_for_key();
@@ -833,24 +863,59 @@ void admin_offerings() {
         
         if (option == 1) {
             char semester[10];
-            get_input("Enter semester number (or 'all' for all): ", semester, 10);
+            get_input("Enter semester number (e.g., 14041): ", semester, 10);
             load_offerings();
             load_courses();
+            load_faculty();
             
-            printf("\n%-8s | %-10s | %-30s | %-8s | %-10s | %-10s\n", 
-                "Off ID", "Course ID", "Course Name", "Capacity", "Enrolled", "Status");
-            printf("--------------------------------------------------------------------------------\n");
+            printf("\nOfferings for semester %s:\n", semester);
+            printf("| %-6s | %-8s | %-30s | %-10s | %-15s | %-8s | %-10s | %-10s |\n", 
+                "Number", "Off ID", "Course Name", "Course ID", "Faculty", "Capacity", "Enrolled", "Status");
+            printf("--------------------------------------------------------------------------------------------------------------------------\n");
             
+            int num = 1;
             for (int i = 0; i < offering_count; i++) {
-                if (strcmp(semester, "all") == 0 || strcmp(offerings[i].semester, semester) == 0) {
+                if (strcmp(offerings[i].semester, semester) == 0) {
                     Course* c = find_course(offerings[i].course_id);
-                    printf("%-8s | %-10s | %-30s | %-8d | %-10d | %-10s\n",
+                    Faculty* f = find_faculty_by_id(offerings[i].faculty_id);
+                    printf("| %-6d | %-8s | %-30s | %-10s | %-15s | %-8d | %-10d | %-10s |\n",
+                        num++,
                         offerings[i].offering_id,
-                        offerings[i].course_id,
                         c ? c->course_name : "Unknown",
+                        c ? c->course_id : "Unknown",
+                        f ? f->last_name : "Unknown",
                         offerings[i].capacity,
                         offerings[i].enrolled_count,
                         offerings[i].status);
+                }
+            }
+            
+            printf("\n1. Search\n2. Go back\n");
+            int sub = get_int("Enter an option: ");
+            if (sub == 1) {
+                char keyword[50];
+                get_input("Enter search keyword: ", keyword, 50);
+                printf("\nSearch results for '%s':\n", keyword);
+                printf("| %-6s | %-8s | %-30s | %-10s | %-8s | %-10s |\n", 
+                    "Number", "Off ID", "Course Name", "Course ID", "Capacity", "Status");
+                printf("----------------------------------------------------------------------------------------------------\n");
+                
+                int num2 = 1;
+                for (int i = 0; i < offering_count; i++) {
+                    if (strcmp(offerings[i].semester, semester) == 0) {
+                        Course* c = find_course(offerings[i].course_id);
+                        if (strstr(c ? c->course_name : "", keyword) || 
+                            strstr(offerings[i].course_id, keyword) ||
+                            strstr(offerings[i].offering_id, keyword)) {
+                            printf("| %-6d | %-8s | %-30s | %-10s | %-8d | %-10s |\n",
+                                num2++,
+                                offerings[i].offering_id,
+                                c ? c->course_name : "Unknown",
+                                c ? c->course_id : "Unknown",
+                                offerings[i].capacity,
+                                offerings[i].status);
+                        }
+                    }
                 }
             }
             wait_for_key();
@@ -1026,6 +1091,27 @@ void admin_courses() {
                     courses[i].level,
                     courses[i].department);
             }
+            
+            printf("\n1. Search\n2. Go back\n");
+            int sub = get_int("Enter an option: ");
+            if (sub == 1) {
+                char keyword[50];
+                get_input("Enter search keyword: ", keyword, 50);
+                printf("\nSearch results for '%s':\n", keyword);
+                printf("%-8s | %-30s | %-5s | %-15s\n", 
+                    "ID", "Course Name", "Units", "Level");
+                printf("--------------------------------------------------------------------\n");
+                for (int i = 0; i < course_count; i++) {
+                    if (strstr(courses[i].course_name, keyword) || 
+                        strstr(courses[i].course_id, keyword)) {
+                        printf("%-8s | %-30s | %-5d | %-15s\n",
+                            courses[i].course_id,
+                            courses[i].course_name,
+                            courses[i].units,
+                            courses[i].level);
+                    }
+                }
+            }
             wait_for_key();
         }
         else if (option == 2) {
@@ -1184,20 +1270,50 @@ void student_offerings(Student* student) {
             load_courses();
             
             printf("\nOfferings for semester %s:\n", semester);
-            printf("%-8s | %-10s | %-30s | %-8s | %-10s\n", 
-                "Off ID", "Course ID", "Course Name", "Capacity", "Status");
-            printf("--------------------------------------------------------------------------------\n");
+            printf("| %-6s | %-8s | %-30s | %-10s | %-8s | %-10s |\n", 
+                "Number", "Off ID", "Course Name", "Course ID", "Capacity", "Status");
+            printf("----------------------------------------------------------------------------------------------------\n");
             
+            int num = 1;
             for (int i = 0; i < offering_count; i++) {
                 if (strcmp(offerings[i].semester, semester) == 0 && 
                     strcmp(offerings[i].status, "approved") == 0) {
                     Course* c = find_course(offerings[i].course_id);
-                    printf("%-8s | %-10s | %-30s | %-8d | %-10s\n",
+                    printf("| %-6d | %-8s | %-30s | %-10s | %-8d | %-10s |\n",
+                        num++,
                         offerings[i].offering_id,
-                        offerings[i].course_id,
                         c ? c->course_name : "Unknown",
+                        c ? c->course_id : "Unknown",
                         offerings[i].capacity - offerings[i].enrolled_count,
                         offerings[i].status);
+                }
+            }
+            
+            printf("\n1. Search\n2. Go back\n");
+            int sub = get_int("Enter an option: ");
+            if (sub == 1) {
+                char keyword[50];
+                get_input("Enter search keyword: ", keyword, 50);
+                printf("\nSearch results for '%s':\n", keyword);
+                printf("| %-6s | %-8s | %-30s | %-10s | %-8s |\n", 
+                    "Number", "Off ID", "Course Name", "Course ID", "Capacity");
+                printf("-----------------------------------------------------------------------------\n");
+                
+                int num2 = 1;
+                for (int i = 0; i < offering_count; i++) {
+                    if (strcmp(offerings[i].semester, semester) == 0 && 
+                        strcmp(offerings[i].status, "approved") == 0) {
+                        Course* c = find_course(offerings[i].course_id);
+                        if (strstr(c ? c->course_name : "", keyword) || 
+                            strstr(offerings[i].course_id, keyword)) {
+                            printf("| %-6d | %-8s | %-30s | %-10s | %-8d |\n",
+                                num2++,
+                                offerings[i].offering_id,
+                                c ? c->course_name : "Unknown",
+                                c ? c->course_id : "Unknown",
+                                offerings[i].capacity - offerings[i].enrolled_count);
+                        }
+                    }
                 }
             }
             wait_for_key();
@@ -1324,12 +1440,41 @@ void student_offerings(Student* student) {
 }
 
 void student_report_card(Student* student) {
-    char semester[10];
-    get_input("Enter semester number (e.g., 14041): ", semester, 10);
+    printf("\nReport card - %s %s\n", student->first_name, student->last_name);
     
     load_courses();
     load_faculty();
     load_offerings();
+    
+    printf("\nAvailable semesters:\n");
+    int sem_count = 0;
+    char semesters[100][10];
+    
+    for (int i = 0; i < student->enrollment_count; i++) {
+        Offering* off = find_offering(student->enrollments[i].offering_id);
+        if (off) {
+            int found = 0;
+            for (int j = 0; j < sem_count; j++) {
+                if (strcmp(semesters[j], off->semester) == 0) {
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) {
+                strcpy(semesters[sem_count++], off->semester);
+                printf("- %s\n", off->semester);
+            }
+        }
+    }
+    
+    if (sem_count == 0) {
+        printf("No courses taken yet.\n");
+        wait_for_key();
+        return;
+    }
+    
+    char semester[10];
+    get_input("Enter semester number: ", semester, 10);
     
     printf("\nReport card - %s %s - %s\n", student->first_name, student->last_name, semester);
     printf("| %-20s | %-10s | %-5s | %-6s | %-6s | %-20s |\n", 
@@ -1373,7 +1518,11 @@ void student_report_card(Student* student) {
     printf("Failed courses: %d\n", failed);
     printf("GPA: %.2f\n", total_units > 0 ? total_grade / total_units : 0);
     
-    wait_for_key();
+    printf("\n1. Go to another semester\n2. Go back\n");
+    int choice = get_int("Enter an option: ");
+    if (choice == 1) {
+        student_report_card(student);
+    }
 }
 
 void student_menu(Student* student) {
@@ -1382,7 +1531,7 @@ void student_menu(Student* student) {
         print_header();
         printf("Welcome %s %s\n", student->first_name, student->last_name);
         printf("1. Offerings\n");
-        printf("2. Courses\n");
+        printf("2. Courses (with search)\n");
         printf("3. Report card\n");
         printf("4. Log out\n");
         printf("\nEnter an option: ");
@@ -1392,16 +1541,36 @@ void student_menu(Student* student) {
             case 1: student_offerings(student); break;
             case 2: 
                 load_courses();
-                printf("\n%-8s | %-30s | %-5s | %-15s | %-15s\n", 
-                    "ID", "Course Name", "Units", "Level", "Department");
-                printf("--------------------------------------------------------------------------------\n");
+                printf("\n%-8s | %-30s | %-5s | %-15s\n", 
+                    "ID", "Course Name", "Units", "Level");
+                printf("--------------------------------------------------------------------\n");
                 for (int i = 0; i < course_count; i++) {
-                    printf("%-8s | %-30s | %-5d | %-15s | %-15s\n",
+                    printf("%-8s | %-30s | %-5d | %-15s\n",
                         courses[i].course_id,
                         courses[i].course_name,
                         courses[i].units,
-                        courses[i].level,
-                        courses[i].department);
+                        courses[i].level);
+                }
+                
+                printf("\n1. Search\n2. Go back\n");
+                int sub = get_int("Enter an option: ");
+                if (sub == 1) {
+                    char keyword[50];
+                    get_input("Enter search keyword: ", keyword, 50);
+                    printf("\nSearch results for '%s':\n", keyword);
+                    printf("%-8s | %-30s | %-5s | %-15s\n", 
+                        "ID", "Course Name", "Units", "Level");
+                    printf("--------------------------------------------------------------------\n");
+                    for (int i = 0; i < course_count; i++) {
+                        if (strstr(courses[i].course_name, keyword) || 
+                            strstr(courses[i].course_id, keyword)) {
+                            printf("%-8s | %-30s | %-5d | %-15s\n",
+                                courses[i].course_id,
+                                courses[i].course_name,
+                                courses[i].units,
+                                courses[i].level);
+                        }
+                    }
                 }
                 wait_for_key();
                 break;
@@ -1426,7 +1595,8 @@ void faculty_offer_course(Faculty* faculty) {
     
     Course* c = find_course(course_id);
     if (!c) {
-        printf("Course not found.\n");
+        printf("Error: Course ID '%s' not found in the system!\n", course_id);
+        printf("Please check the course ID and try again.\n");
         wait_for_key();
         return;
     }
@@ -1463,13 +1633,12 @@ void faculty_offer_course(Faculty* faculty) {
 
 void faculty_my_offerings(Faculty* faculty) {
     char semester[10];
-    get_input("Enter semester number (or 'all' for all): ", semester, 10);
+    get_input("Enter semester number (e.g., 14041): ", semester, 10);
     
     load_offerings();
     load_courses();
     load_students();
     
-    // Store offering IDs for lookup
     char offering_ids[100][10];
     int id_count = 0;
     
@@ -1480,7 +1649,7 @@ void faculty_my_offerings(Faculty* faculty) {
     
     for (int i = 0; i < offering_count; i++) {
         if (strcmp(offerings[i].faculty_id, faculty->faculty_id) == 0) {
-            if (strcmp(semester, "all") == 0 || strcmp(offerings[i].semester, semester) == 0) {
+            if (strcmp(offerings[i].semester, semester) == 0) {
                 Course* c = find_course(offerings[i].course_id);
                 printf("| %-6d | %-8s | %-30s | %-10s | %-8d | %-10d | %-10s |\n",
                     id_count + 1,
@@ -1498,12 +1667,15 @@ void faculty_my_offerings(Faculty* faculty) {
     }
     
     if (id_count == 0) {
-        printf("No offerings found.\n");
+        printf("No offerings found for semester %s.\n", semester);
         wait_for_key();
         return;
     }
     
-    int choice = get_int("\n1. Go to offering\n2. Go back\nEnter an option: ");
+    printf("\n1. Go to offering\n");
+    printf("2. Search\n");
+    printf("3. Go back\n");
+    int choice = get_int("Enter an option: ");
     
     if (choice == 1) {
         int num = get_int("Enter offering number (1-%d): ", id_count);
@@ -1524,18 +1696,24 @@ void faculty_my_offerings(Faculty* faculty) {
         }
         
         printf("\n=== Offering Details ===\n");
-        printf("Offering ID: %s\n", off->offering_id);
-        printf("Course ID: %s\n", off->course_id);
+        printf("| %-8s | %-10s | %-30s | %-8s | %-10s | %-10s |\n",
+            "Off ID", "Course ID", "Course Name", "Capacity", "Enrolled", "Status");
+        printf("--------------------------------------------------------------------\n");
         Course* c = find_course(off->course_id);
-        printf("Course Name: %s\n", c ? c->course_name : "Unknown");
-        printf("Semester: %s\n", off->semester);
-        printf("Capacity: %d, Enrolled: %d\n", off->capacity, off->enrolled_count);
-        printf("Status: %s\n", off->status);
+        printf("| %-8s | %-10s | %-30s | %-8d | %-10d | %-10s |\n",
+            off->offering_id,
+            off->course_id,
+            c ? c->course_name : "Unknown",
+            off->capacity,
+            off->enrolled_count,
+            off->status);
         
         printf("\n1. Add capacity\n");
         printf("2. Record grades\n");
-        printf("3. Remove offering (request)\n");
-        printf("4. Go back\n");
+        printf("3. Remove offering\n");
+        printf("4. Publish a homework (LMS - Bonus)\n");
+        printf("5. Publish an exam (LMS - Bonus)\n");
+        printf("6. Go back\n");
         int sub = get_int("Enter an option: ");
         
         if (sub == 1) {
@@ -1597,6 +1775,41 @@ void faculty_my_offerings(Faculty* faculty) {
             }
             wait_for_key();
         }
+        else if (sub == 4) {
+            printf("Homework published for offering %s (LMS Bonus Feature).\n", off->offering_id);
+            wait_for_key();
+        }
+        else if (sub == 5) {
+            printf("Exam published for offering %s (LMS Bonus Feature).\n", off->offering_id);
+            wait_for_key();
+        }
+    }
+    else if (choice == 2) {
+        char keyword[50];
+        get_input("Enter search keyword: ", keyword, 50);
+        printf("\nSearch results for '%s':\n", keyword);
+        printf("| %-6s | %-8s | %-30s | %-10s | %-8s | %-10s |\n", 
+            "Number", "Off ID", "Course Name", "Course ID", "Capacity", "Status");
+        printf("----------------------------------------------------------------------------------------------\n");
+        
+        int num2 = 1;
+        for (int i = 0; i < offering_count; i++) {
+            if (strcmp(offerings[i].faculty_id, faculty->faculty_id) == 0) {
+                Course* c = find_course(offerings[i].course_id);
+                if (strstr(c ? c->course_name : "", keyword) || 
+                    strstr(offerings[i].course_id, keyword) ||
+                    strstr(offerings[i].offering_id, keyword)) {
+                    printf("| %-6d | %-8s | %-30s | %-10s | %-8d | %-10s |\n",
+                        num2++,
+                        offerings[i].offering_id,
+                        c ? c->course_name : "Unknown",
+                        c ? c->course_id : "Unknown",
+                        offerings[i].capacity,
+                        offerings[i].status);
+                }
+            }
+        }
+        wait_for_key();
     }
 }
 
@@ -1637,6 +1850,9 @@ void forgot_password() {
         return;
     }
     
+    printf("\n=== Security Questions for %s %s ===\n", s->first_name, s->last_name);
+    printf("(Note: Answers are case-insensitive)\n\n");
+    
     char answer[100];
     int question = 0;
     int retry = 0;
@@ -1652,19 +1868,38 @@ void forgot_password() {
         
         get_input("", answer, 100);
         
+        // Trim spaces
+        char* p = answer;
+        while (*p == ' ') p++;
+        char* end = p + strlen(p) - 1;
+        while (end > p && *end == ' ') end--;
+        *(end + 1) = '\0';
+        
+        // Convert to lowercase for comparison
+        char answer_lower[100];
+        char stored_lower[100];
+        strcpy(answer_lower, p);
+        strcpy(stored_lower, question == 0 ? s->birthplace : 
+                         question == 1 ? s->first_book : s->first_bicycle_color);
+        
+        for (int i = 0; answer_lower[i]; i++) answer_lower[i] = tolower(answer_lower[i]);
+        for (int i = 0; stored_lower[i]; i++) stored_lower[i] = tolower(stored_lower[i]);
+        
         int correct = 0;
-        if (question == 0 && strcmp(answer, s->birthplace) == 0) correct = 1;
-        else if (question == 1 && strcmp(answer, s->first_book) == 0) correct = 1;
-        else if (question == 2 && strcmp(answer, s->first_bicycle_color) == 0) correct = 1;
+        if (question == 0 && strcmp(answer_lower, stored_lower) == 0) correct = 1;
+        else if (question == 1 && strcmp(answer_lower, stored_lower) == 0) correct = 1;
+        else if (question == 2 && strcmp(answer_lower, stored_lower) == 0) correct = 1;
         
         if (correct) {
+            printf("✓ Correct!\n");
             question++;
             retry = 0;
         } else {
-            printf("Incorrect answer.\n");
+            printf("✗ Incorrect answer.\n");
             retry++;
             if (retry >= 3) {
                 printf("Too many incorrect attempts.\n");
+                wait_for_key();
                 return;
             }
             printf("1. Retry\n2. Go to login menu\n");
@@ -1776,7 +2011,6 @@ int main() {
     load_courses();
     load_offerings();
     
-    // Enable offering for testing
     calendar.offering_enabled = 1;
     calendar.unit_selection_enabled = 1;
     calendar.current_phase = 0;
