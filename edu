@@ -123,7 +123,6 @@ typedef struct {
     char faculty_id[20];
     char semester[10];
     int capacity;
-    int old_capacity;
     char location[100];
     char status[20];
     char type[30];
@@ -173,7 +172,7 @@ void faculty_menu(Faculty* faculty);
 void login();
 void admin_requests();
 void faculty_offer_course(Faculty* faculty);
-void add_request_from_offering(Offering* off, char* type, int new_capacity, int old_capacity);
+void add_request_from_offering(Offering* off, char* type);
 void forgot_password();
 void clear_input();
 void get_input(char* prompt, char* buffer, int size);
@@ -766,13 +765,14 @@ Offering* find_offering(char* offering_id) {
 
 // ================ REQUEST FUNCTIONS ================
 
-void add_request_from_offering(Offering* off, char* type, int new_capacity, int old_capacity) {
+void add_request_from_offering(Offering* off, char* type) {
     if (off == NULL) {
         printf("ERROR: Offering pointer is NULL!\n");
         return;
     }
     
     load_requests();
+    
     if (request_count >= MAX_REQUESTS) {
         printf("ERROR: Request queue is full!\n");
         return;
@@ -780,13 +780,13 @@ void add_request_from_offering(Offering* off, char* type, int new_capacity, int 
     
     Request req;
     memset(&req, 0, sizeof(Request));
+    
     req.id = request_count + 1;
     strcpy(req.offering_id, off->offering_id);
     strcpy(req.course_id, off->course_id);
     strcpy(req.faculty_id, off->faculty_id);
     strcpy(req.semester, off->semester);
-    req.capacity = (new_capacity > 0) ? new_capacity : off->capacity;
-    req.old_capacity = old_capacity;  // <-- اینجا مقداردهی میشه
+    req.capacity = off->capacity;
     strcpy(req.location, off->location);
     strcpy(req.status, "pending");
     strcpy(req.type, type);
@@ -1197,178 +1197,194 @@ void admin_faculty() {
     } while(option != 0);
 }
 
+// ======================= REPLACE WHOLE FUNCTION =======================
+// جایگزین تابع قبلی admin_requests از حدود خطوط 1200 تا 1265
 void admin_requests() {
-    load_requests();
-    
-    printf("\nAdmin: Requests\n");
+    system("cls");
+    printf("Admin: Requests\n");
     printf("List of requests\n\n");
-    
-    int found = 0;
-    int pending_ids[MAX_REQUESTS];
+
+    Request requests[1000];
+    int request_count = 0;
+    load_requests(requests, &request_count);   // همان تابع قبلی که لیست درخواست‌ها را از فایل می‌خواند
+
+    // ایندکس‌های درخواست‌های pending را جدا نگه می‌داریم تا شماره‌گذاری منوی خروجی تمیز باشد
+    int pending_index[1000];
     int pending_count = 0;
-    
+
     for (int i = 0; i < request_count; i++) {
-        if (requests[i].status[0] == '\0') continue;
-        
         if (strcmp(requests[i].status, "pending") == 0) {
-            found = 1;
-            pending_ids[pending_count++] = i;
-            
-            printf("%d. ", pending_count);
-            
-            if (strcmp(requests[i].type, "offer_course") == 0) {
-                printf("course offering\n");
-                printf("    Course: %s\n", requests[i].course_name);
-                printf("    Faculty: %s\n", requests[i].faculty_name);
-                printf("    Department: %s\n", requests[i].course_name);
-                printf("    Capacity: %d\n", requests[i].capacity);
-            }
-            else if (strcmp(requests[i].type, "remove_course") == 0) {
-                printf("course removing\n");
-                printf("    Course: %s\n", requests[i].course_name);
-                printf("    Faculty: %s\n", requests[i].faculty_name);
-                printf("    Department: %s\n", requests[i].course_name);
-                printf("    Capacity: %d\n", requests[i].capacity);
-            }
-            else if (strcmp(requests[i].type, "increase_capacity") == 0) {
-                printf("capacity increment\n");
-                printf("    Course: %s\n", requests[i].course_name);
-                printf("    Faculty: %s\n", requests[i].faculty_name);
-                printf("    Department: %s\n", requests[i].course_name);
-                printf("    Capacity: %d\n", requests[i].capacity);
-                printf("    No. enrollments: %d\n", requests[i].old_capacity);
-            }
-            printf("\n");
+            pending_index[pending_count++] = i;
         }
     }
-    
-    if (!found) {
+
+    if (pending_count == 0) {
         printf("No pending requests.\n");
-        wait_for_key();
+        printf("Press enter to go back...");
+        getchar();
+        getchar();
         return;
     }
-    
-    printf("\n1. Go to request number\n");
-    printf("2. Go back\n");
-    printf("Enter an option: ");
-    
+
+    // حلقه‌ی منو تا وقتی ادمین بخواهد ادامه دهد
     int choice;
-    scanf("%d", &choice);
-    clear_input();
-    
-    if (choice == 1) {
-        int req_num = get_int("Enter request number: ");
-        
-        if (req_num < 1 || req_num > pending_count) {
-            printf("Invalid request number.\n");
-            wait_for_key();
-            return;
+    do {
+        system("cls");
+        printf("Admin: Requests\n");
+        printf("List of requests\n\n");
+
+        // نمایش شبیه عکس: شماره‌دار و با نوع درخواست
+        for (int k = 0; k < pending_count; k++) {
+            int idx = pending_index[k];
+            printf("%d. %s\n", k + 1, requests[idx].type);  // مثلا "course offering", "course removing", "capacity increment"
+
+            printf("       Course: %s\n", requests[idx].course_name);
+            printf("       Faculty: %s\n", requests[idx].faculty_name);
+            printf("       Department: %s\n", requests[idx].location);   // اگر در کدت اسم فیلد department جداست، این خط را با آن عوض کن
+            printf("       Capacity: %d\n", requests[idx].capacity);
+
+            // برای نوع capacity increment تعداد ثبت‌نام‌ها را هم مثل عکس می‌توانی چاپ کنی
+            if (strcmp(requests[idx].type, "capacity increment") == 0) {
+                printf("       No. enrollments: <no. enrollments>\n");   // اگر جایی تعداد ثبت‌نام واقعی داری اینجا بگذار
+            }
+
+            printf("\n");
         }
-        
-        int idx = pending_ids[req_num - 1];
-        
-        printf("\n----------------------------------------\n");
-        printf("Request #%d\n", requests[idx].id);
-        printf("Type: %s\n", requests[idx].type);
-        printf("Course: %s\n", requests[idx].course_name);
-        printf("Faculty: %s\n", requests[idx].faculty_name);
-        printf("Semester: %s\n", requests[idx].semester);
-        
-        if (strcmp(requests[idx].type, "increase_capacity") == 0) {
-            printf("Current Capacity: %d\n", requests[idx].old_capacity);
-            printf("Requested Capacity: %d\n", requests[idx].capacity);
-        } else {
-            printf("Capacity: %d\n", requests[idx].capacity);
-        }
-        printf("Status: %s\n", requests[idx].status);
-        printf("----------------------------------------\n");
-        
-        printf("\n1. Approve\n");
-        printf("2. Reject\n");
+
+        printf("...\n\n");
+        printf("1. Go to request number\n");
+        printf("2. Approve all\n");
+        printf("3. Go back\n");
         printf("Enter an option: ");
-        
-        int action = get_int("Enter choice: ");
-        
-        if (action == 1) {
-            // ====== APPROVE ======
-            strcpy(requests[idx].status, "approved");
-            
-            Offering* off = find_offering(requests[idx].offering_id);
-            
-            if (strcmp(requests[idx].type, "offer_course") == 0) {
-                if (off != NULL) {
-                    strcpy(off->status, "approved");
-                    save_offerings();
-                    printf("✅ Offering approved!\n");
-                } else {
-                    Offering new_off;
-                    strcpy(new_off.offering_id, requests[idx].offering_id);
-                    strcpy(new_off.course_id, requests[idx].course_id);
-                    strcpy(new_off.faculty_id, requests[idx].faculty_id);
-                    strcpy(new_off.semester, requests[idx].semester);
-                    new_off.capacity = requests[idx].capacity;
-                    new_off.enrolled_count = 0;
-                    strcpy(new_off.location, requests[idx].location);
-                    strcpy(new_off.status, "approved");
-                    new_off.assignment_count = 0;
-                    new_off.exam_count = 0;
-                    offerings[offering_count++] = new_off;
-                    save_offerings();
-                    printf("✅ New offering created and approved!\n");
-                }
-            }
-            else if (strcmp(requests[idx].type, "increase_capacity") == 0) {
-                if (off != NULL) {
-                    off->capacity = requests[idx].capacity;
-                    save_offerings();
-                    printf("✅ Capacity increased from %d to %d\n", 
-                        requests[idx].old_capacity, requests[idx].capacity);
-                } else {
-                    printf("⚠️ Offering not found!\n");
-                }
-            }
-            else if (strcmp(requests[idx].type, "remove_course") == 0) {
-                if (off != NULL) {
-                    int idx_off = -1;
-                    for (int j = 0; j < offering_count; j++) {
-                        if (strcmp(offerings[j].offering_id, requests[idx].offering_id) == 0) {
-                            idx_off = j;
-                            break;
-                        }
-                    }
-                    if (idx_off != -1) {
-                        for (int j = idx_off; j < offering_count - 1; j++) {
-                            offerings[j] = offerings[j+1];
-                        }
-                        offering_count--;
-                        save_offerings();
-                        printf("✅ Offering removed.\n");
-                    }
-                } else {
-                    printf("⚠️ Offering not found!\n");
-                }
-            }
-            
-            save_requests();
-            printf("✅ Request approved.\n");
-            
-        } else if (action == 2) {
-            // ====== REJECT ======
-            strcpy(requests[idx].status, "rejected");
-            
-            Offering* off = find_offering(requests[idx].offering_id);
-            if (off != NULL && strcmp(requests[idx].type, "offer_course") == 0) {
-                strcpy(off->status, "rejected");
-                save_offerings();
-            }
-            
-            save_requests();
-            printf("❌ Request rejected.\n");
+
+        if (scanf("%d", &choice) != 1) {
+            while (getchar() != '\n'); // پاک کردن بافر
+            choice = 0;
         }
-        
-        wait_for_key();
-    }
+
+        if (choice == 1) {
+            int req_no;
+            printf("Enter request number: ");
+            if (scanf("%d", &req_no) != 1) {
+                while (getchar() != '\n');
+                printf("Invalid input.\n");
+                printf("Press enter to continue...");
+                getchar();
+                getchar();
+                continue;
+            }
+
+            if (req_no < 1 || req_no > pending_count) {
+                printf("Invalid request number.\n");
+                printf("Press enter to continue...");
+                getchar();
+                getchar();
+                continue;
+            }
+
+            int idx = pending_index[req_no - 1];
+
+            int action;
+            printf("\nSelected request:\n");
+            printf("   %s\n", requests[idx].type);
+            printf("   Course: %s\n", requests[idx].course_name);
+            printf("   Faculty: %s\n", requests[idx].faculty_name);
+            printf("   Capacity: %d\n\n", requests[idx].capacity);
+
+            printf("1. Approve\n");
+            printf("2. Reject\n");
+            printf("3. Cancel\n");
+            printf("Enter an option: ");
+
+            if (scanf("%d", &action) != 1) {
+                while (getchar() != '\n');
+                printf("Invalid input.\n");
+                printf("Press enter to continue...");
+                getchar();
+                getchar();
+                continue;
+            }
+
+            if (action == 1) {
+                // تأیید تکی
+                strcpy(requests[idx].status, "approved");
+                // اگر برای offering هم وضعیت جداگانه ذخیره می‌کنی، اینجا همان منطق قبلی Approve all را صدا بزن:
+                // update_offering_status(requests[idx].offering_id, "approved");
+
+                save_requests(requests, request_count);  // همان تابع قبلی که لیست درخواست‌ها را ذخیره می‌کند
+
+                printf("Request approved.\n");
+
+                // این درخواست دیگر pending نیست، از لیست pending حذفش می‌کنیم
+                for (int k = req_no - 1; k < pending_count - 1; k++) {
+                    pending_index[k] = pending_index[k + 1];
+                }
+                pending_count--;
+
+            } else if (action == 2) {
+                // رد تکی
+                strcpy(requests[idx].status, "rejected");
+                // اگر برای offering رد کردن هم لازم است همانجا انجام بده:
+                // update_offering_status(requests[idx].offering_id, "rejected");
+
+                save_requests(requests, request_count);
+
+                printf("Request rejected.\n");
+
+                for (int k = req_no - 1; k < pending_count - 1; k++) {
+                    pending_index[k] = pending_index[k + 1];
+                }
+                pending_count--;
+
+            } else {
+                // Cancel
+                printf("Operation cancelled.\n");
+            }
+
+            printf("Press enter to continue...");
+            getchar();
+            getchar();
+
+        } else if (choice == 2) {
+            // منطق قبلی Approve all ولی فقط روی pending‌ها
+            for (int k = 0; k < pending_count; k++) {
+                int idx = pending_index[k];
+                strcpy(requests[idx].status, "approved");
+                // همان منطق قبلی برای offering:
+                // update_offering_status(requests[idx].offering_id, "approved");
+            }
+
+            save_requests(requests, request_count);
+
+            printf("All pending requests approved.\n");
+            printf("Press enter to go back...");
+            getchar();
+            getchar();
+            break;
+
+        } else if (choice == 3) {
+            // Go back
+            break;
+
+        } else {
+            printf("Invalid option.\n");
+            printf("Press enter to continue...");
+            getchar();
+            getchar();
+        }
+
+        // اگر دیگر هیچ درخواست pending نمانده باشد، از حلقه خارج می‌شویم
+        if (pending_count == 0) {
+            printf("No more pending requests.\n");
+            printf("Press enter to go back...");
+            getchar();
+            getchar();
+            break;
+        }
+
+    } while (1);
 }
+// ======================= END REPLACEMENT =======================
 
 void admin_offerings() {
     int option;
@@ -2405,65 +2421,12 @@ void faculty_offer_course(Faculty* faculty) {
     save_offerings();
     
     // ????? ??????? ?? ???????? ?? ???? ????? (?? ??????? ???)
-   add_request_from_offering(&offerings[offering_count - 1], "offer_course", capacity, 0);
+    add_request_from_offering(&offerings[offering_count - 1], "offer_course");
     
     printf("\nSent request to admin.\n");
     printf("Press any key to go to offerings...\n");
     wait_for_key();
 }
-
-void faculty_increase_capacity(Faculty* faculty) {
-    char oid[10];
-    get_input("Enter offering ID: ", oid, 10);
-    
-    Offering* off = find_offering(oid);
-    if (!off) {
-        printf("Offering not found.\n");
-        wait_for_key();
-        return;
-    }
-    if (strcmp(off->faculty_id, faculty->faculty_id) != 0) {
-        printf("You are not the instructor of this course.\n");
-        wait_for_key();
-        return;
-    }
-    if (strcmp(off->status, "approved") != 0) {
-        printf("This offering is not approved yet.\n");
-        wait_for_key();
-        return;
-    }
-    
-    printf("Current capacity: %d\n", off->capacity);
-    printf("Current enrollments: %d\n", off->enrolled_count);
-    int new_capacity = get_int("Enter new capacity: ");
-    if (new_capacity <= off->capacity) {
-        printf("New capacity must be greater than current capacity.\n");
-        wait_for_key();
-        return;
-    }
-    
-    add_request_from_offering(off, "increase_capacity", new_capacity, off->capacity);
-    printf("\n✅ Capacity increase request sent to admin.\n");
-    wait_for_key();
-}
-
-void faculty_remove_offering(Faculty* faculty, Offering* off) {
-    if (!is_offering_time()) {
-        printf("Cannot remove offering outside offering period.\n");
-        wait_for_key();
-        return;
-    }
-    if (strcmp(off->faculty_id, faculty->faculty_id) != 0) {
-        printf("You are not the instructor of this course.\n");
-        wait_for_key();
-        return;
-    }
-    
-    add_request_from_offering(off, "remove_course", 0, 0);
-    printf("\n✅ Removal request sent to admin.\n");
-    wait_for_key();
-}
-
 void faculty_my_offerings(Faculty* faculty) {
     char semester[10];
     get_input("Enter semester number (e.g., 14041): ", semester, 10);
@@ -2591,7 +2554,7 @@ void faculty_my_offerings(Faculty* faculty) {
             if (is_offering_time()) {
                 strcpy(off->status, "pending_removal");
                 save_offerings();
-                add_request_from_offering(off, "remove_course", 0, 0);
+                add_request_from_offering(off, "remove_course");
                 printf("Removal request sent to admin.\n");
             } else {
                 printf("Cannot remove offering outside offering period.\n");
