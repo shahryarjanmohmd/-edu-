@@ -1197,194 +1197,59 @@ void admin_faculty() {
     } while(option != 0);
 }
 
-// ======================= REPLACE WHOLE FUNCTION =======================
-// جایگزین تابع قبلی admin_requests از حدود خطوط 1200 تا 1265
 void admin_requests() {
-    system("cls");
-    printf("Admin: Requests\n");
-    printf("List of requests\n\n");
-
-    Request requests[1000];
-    int request_count = 0;
-    load_requests(requests, &request_count);   // همان تابع قبلی که لیست درخواست‌ها را از فایل می‌خواند
-
-    // ایندکس‌های درخواست‌های pending را جدا نگه می‌داریم تا شماره‌گذاری منوی خروجی تمیز باشد
-    int pending_index[1000];
-    int pending_count = 0;
-
-    for (int i = 0; i < request_count; i++) {
-        if (strcmp(requests[i].status, "pending") == 0) {
-            pending_index[pending_count++] = i;
-        }
-    }
-
-    if (pending_count == 0) {
-        printf("No pending requests.\n");
-        printf("Press enter to go back...");
-        getchar();
-        getchar();
-        return;
-    }
-
-    // حلقه‌ی منو تا وقتی ادمین بخواهد ادامه دهد
-    int choice;
-    do {
-        system("cls");
-        printf("Admin: Requests\n");
-        printf("List of requests\n\n");
-
-        // نمایش شبیه عکس: شماره‌دار و با نوع درخواست
-        for (int k = 0; k < pending_count; k++) {
-            int idx = pending_index[k];
-            printf("%d. %s\n", k + 1, requests[idx].type);  // مثلا "course offering", "course removing", "capacity increment"
-
-            printf("       Course: %s\n", requests[idx].course_name);
-            printf("       Faculty: %s\n", requests[idx].faculty_name);
-            printf("       Department: %s\n", requests[idx].location);   // اگر در کدت اسم فیلد department جداست، این خط را با آن عوض کن
-            printf("       Capacity: %d\n", requests[idx].capacity);
-
-            // برای نوع capacity increment تعداد ثبت‌نام‌ها را هم مثل عکس می‌توانی چاپ کنی
-            if (strcmp(requests[idx].type, "capacity increment") == 0) {
-                printf("       No. enrollments: <no. enrollments>\n");   // اگر جایی تعداد ثبت‌نام واقعی داری اینجا بگذار
-            }
-
-            printf("\n");
-        }
-
-        printf("...\n\n");
-        printf("1. Go to request number\n");
-        printf("2. Approve all\n");
-        printf("3. Go back\n");
-        printf("Enter an option: ");
-
-        if (scanf("%d", &choice) != 1) {
-            while (getchar() != '\n'); // پاک کردن بافر
-            choice = 0;
-        }
+    int choice, req_id;
+    load_requests();
+    while(1) {
+        printf("\n--- Admin Requests Menu ---\n");
+        printf("1. List pending requests\n");
+        printf("2. Approve a request\n");
+        printf("3. Reject a request\n");
+        printf("4. Back\n");
+        printf("Choice: ");
+        scanf("%d", &choice);
 
         if (choice == 1) {
-            int req_no;
-            printf("Enter request number: ");
-            if (scanf("%d", &req_no) != 1) {
-                while (getchar() != '\n');
-                printf("Invalid input.\n");
-                printf("Press enter to continue...");
-                getchar();
-                getchar();
-                continue;
-            }
-
-            if (req_no < 1 || req_no > pending_count) {
-                printf("Invalid request number.\n");
-                printf("Press enter to continue...");
-                getchar();
-                getchar();
-                continue;
-            }
-
-            int idx = pending_index[req_no - 1];
-
-            int action;
-            printf("\nSelected request:\n");
-            printf("   %s\n", requests[idx].type);
-            printf("   Course: %s\n", requests[idx].course_name);
-            printf("   Faculty: %s\n", requests[idx].faculty_name);
-            printf("   Capacity: %d\n\n", requests[idx].capacity);
-
-            printf("1. Approve\n");
-            printf("2. Reject\n");
-            printf("3. Cancel\n");
-            printf("Enter an option: ");
-
-            if (scanf("%d", &action) != 1) {
-                while (getchar() != '\n');
-                printf("Invalid input.\n");
-                printf("Press enter to continue...");
-                getchar();
-                getchar();
-                continue;
-            }
-
-            if (action == 1) {
-                // تأیید تکی
-                strcpy(requests[idx].status, "approved");
-                // اگر برای offering هم وضعیت جداگانه ذخیره می‌کنی، اینجا همان منطق قبلی Approve all را صدا بزن:
-                // update_offering_status(requests[idx].offering_id, "approved");
-
-                save_requests(requests, request_count);  // همان تابع قبلی که لیست درخواست‌ها را ذخیره می‌کند
-
-                printf("Request approved.\n");
-
-                // این درخواست دیگر pending نیست، از لیست pending حذفش می‌کنیم
-                for (int k = req_no - 1; k < pending_count - 1; k++) {
-                    pending_index[k] = pending_index[k + 1];
+            printf("\nPending Requests:\n");
+            for(int i = 0; i < request_count; i++) {
+                if(strcmp(requests[i].status, "pending") == 0) {
+                    printf("ID: %d | Type: %s | Course: %s | Faculty: %s | Status: %s\n", 
+                        requests[i].id, requests[i].type, requests[i].course_name, 
+                        requests[i].faculty_name, requests[i].status);
                 }
-                pending_count--;
-
-            } else if (action == 2) {
-                // رد تکی
-                strcpy(requests[idx].status, "rejected");
-                // اگر برای offering رد کردن هم لازم است همانجا انجام بده:
-                // update_offering_status(requests[idx].offering_id, "rejected");
-
-                save_requests(requests, request_count);
-
-                printf("Request rejected.\n");
-
-                for (int k = req_no - 1; k < pending_count - 1; k++) {
-                    pending_index[k] = pending_index[k + 1];
+            }
+        } 
+        else if (choice == 2 || choice == 3) {
+            printf("Enter Request ID to %s: ", choice == 2 ? "Approve" : "Reject");
+            scanf("%d", &req_id);
+            int found = 0;
+            for(int i = 0; i < request_count; i++) {
+                if(requests[i].id == req_id && strcmp(requests[i].status, "pending") == 0) {
+                    strcpy(requests[i].status, choice == 2 ? "approved" : "rejected");
+                    
+                    // اگر تأیید شد، وضعیت درس ارائه شده نیز باید آپدیت شود
+                    if (choice == 2) {
+                        for(int j = 0; j < offering_count; j++) {
+                            if(strcmp(offerings[j].offering_id, requests[i].offering_id) == 0) {
+                                strcpy(offerings[j].status, "approved");
+                                save_offerings();
+                                break;
+                            }
+                        }
+                    }
+                    printf("Request %d has been %s.\n", req_id, choice == 2 ? "APPROVED" : "REJECTED");
+                    save_requests();
+                    found = 1;
+                    break;
                 }
-                pending_count--;
-
-            } else {
-                // Cancel
-                printf("Operation cancelled.\n");
             }
-
-            printf("Press enter to continue...");
-            getchar();
-            getchar();
-
-        } else if (choice == 2) {
-            // منطق قبلی Approve all ولی فقط روی pending‌ها
-            for (int k = 0; k < pending_count; k++) {
-                int idx = pending_index[k];
-                strcpy(requests[idx].status, "approved");
-                // همان منطق قبلی برای offering:
-                // update_offering_status(requests[idx].offering_id, "approved");
-            }
-
-            save_requests(requests, request_count);
-
-            printf("All pending requests approved.\n");
-            printf("Press enter to go back...");
-            getchar();
-            getchar();
-            break;
-
-        } else if (choice == 3) {
-            // Go back
-            break;
-
-        } else {
-            printf("Invalid option.\n");
-            printf("Press enter to continue...");
-            getchar();
-            getchar();
+            if (!found) printf("Request ID not found or not pending.\n");
         }
-
-        // اگر دیگر هیچ درخواست pending نمانده باشد، از حلقه خارج می‌شویم
-        if (pending_count == 0) {
-            printf("No more pending requests.\n");
-            printf("Press enter to go back...");
-            getchar();
-            getchar();
+        else if (choice == 4) {
             break;
         }
-
-    } while (1);
+    }
 }
-// ======================= END REPLACEMENT =======================
 
 void admin_offerings() {
     int option;
