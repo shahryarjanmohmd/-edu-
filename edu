@@ -205,6 +205,8 @@ void faculty_publish_assignment(Offering* off);
 void faculty_publish_exam(Offering* off);
 void student_submit_assignment(Student* student);
 void student_submit_exam(Student* student);
+void save_lms_for_offering(Offering* off);
+void load_lms_for_offering(Offering* off);
 
 // ================ UTILITY FUNCTIONS ================
 
@@ -706,6 +708,9 @@ void load_offerings() {
         }
         if (offerings[i].enrolled_count < 0) offerings[i].enrolled_count = 0;
         if (offerings[i].enrolled_count > 100) offerings[i].enrolled_count = 100;
+        
+        // Load published assignments & exams for this offering
+        load_lms_for_offering(&offerings[i]);
     }
     fclose(f);
 }
@@ -880,6 +885,13 @@ Course* find_course(char* course_id) {
 }
 
 Offering* find_offering(char* offering_id) {
+    // Search in memory first (preserves published exams/assignments)
+    for (int i = 0; i < offering_count; i++) {
+        if (strcmp(offerings[i].offering_id, offering_id) == 0) {
+            return &offerings[i];
+        }
+    }
+    // If not found in memory, try loading from disk
     load_offerings();
     for (int i = 0; i < offering_count; i++) {
         if (strcmp(offerings[i].offering_id, offering_id) == 0) {
@@ -1949,6 +1961,150 @@ void faculty_view_surveys(Faculty* faculty) {
 
 // ================ BONUS: LMS FUNCTIONS ================
 
+// Save assignments & exams of one offering to a dedicated file
+void save_lms_for_offering(Offering* off) {
+    if (!off || strlen(off->offering_id) == 0) return;
+    char filename[64];
+    snprintf(filename, sizeof(filename), "lms_%s.dat", off->offering_id);
+    FILE* f = fopen(filename, "w");
+    if (!f) return;
+    
+    // Assignments
+    fprintf(f, "ASSIGNMENTS %d\n", off->assignment_count);
+    for (int a = 0; a < off->assignment_count && a < 20; a++) {
+        fprintf(f, "%s\n", off->assignments[a].assignment_id);
+        fprintf(f, "%s\n", off->assignments[a].title);
+        fprintf(f, "%.2f\n", off->assignments[a].max_score);
+        fprintf(f, "%d\n", off->assignments[a].question_count);
+        for (int q = 0; q < off->assignments[a].question_count && q < 10; q++) {
+            fprintf(f, "%s\n", off->assignments[a].questions[q]);
+            for (int o = 0; o < 4; o++) {
+                fprintf(f, "%s\n", off->assignments[a].options[q][o]);
+            }
+            fprintf(f, "%d\n", off->assignments[a].correct_answers[q]);
+        }
+    }
+    
+    // Exams
+    fprintf(f, "EXAMS %d\n", off->exam_count);
+    for (int e = 0; e < off->exam_count && e < 20; e++) {
+        fprintf(f, "%s\n", off->exams[e].exam_id);
+        fprintf(f, "%s\n", off->exams[e].title);
+        fprintf(f, "%.2f\n", off->exams[e].max_score);
+        fprintf(f, "%d\n", off->exams[e].question_count);
+        for (int q = 0; q < off->exams[e].question_count && q < 10; q++) {
+            fprintf(f, "%d\n", off->exams[e].question_types[q]);
+            fprintf(f, "%s\n", off->exams[e].questions[q]);
+            if (off->exams[e].question_types[q] == 0) {
+                for (int o = 0; o < 4; o++) {
+                    fprintf(f, "%s\n", off->exams[e].options[q][o]);
+                }
+                fprintf(f, "%d\n", off->exams[e].correct_answers[q]);
+            } else {
+                fprintf(f, "%s\n", off->exams[e].model_answers[q]);
+            }
+        }
+    }
+    fclose(f);
+}
+
+void load_lms_for_offering(Offering* off) {
+    if (!off || strlen(off->offering_id) == 0) return;
+    char filename[64];
+    snprintf(filename, sizeof(filename), "lms_%s.dat", off->offering_id);
+    FILE* f = fopen(filename, "r");
+    if (!f) return;
+    
+    char line[600];
+    
+    // Assignments
+    if (fgets(line, sizeof(line), f)) {
+        int acount = 0;
+        sscanf(line, "ASSIGNMENTS %d", &acount);
+        if (acount < 0) acount = 0;
+        if (acount > 20) acount = 20;
+        off->assignment_count = acount;
+        for (int a = 0; a < acount; a++) {
+            if (!fgets(line, sizeof(line), f)) break;
+            line[strcspn(line, "\n")] = 0;
+            strncpy(off->assignments[a].assignment_id, line, 9);
+            
+            if (!fgets(line, sizeof(line), f)) break;
+            line[strcspn(line, "\n")] = 0;
+            strncpy(off->assignments[a].title, line, 99);
+            
+            if (!fgets(line, sizeof(line), f)) break;
+            off->assignments[a].max_score = (float)atof(line);
+            
+            if (!fgets(line, sizeof(line), f)) break;
+            off->assignments[a].question_count = atoi(line);
+            if (off->assignments[a].question_count > 10) off->assignments[a].question_count = 10;
+            
+            for (int q = 0; q < off->assignments[a].question_count; q++) {
+                if (!fgets(line, sizeof(line), f)) break;
+                line[strcspn(line, "\n")] = 0;
+                strncpy(off->assignments[a].questions[q], line, 499);
+                for (int o = 0; o < 4; o++) {
+                    if (!fgets(line, sizeof(line), f)) break;
+                    line[strcspn(line, "\n")] = 0;
+                    strncpy(off->assignments[a].options[q][o], line, 99);
+                }
+                if (!fgets(line, sizeof(line), f)) break;
+                off->assignments[a].correct_answers[q] = atoi(line);
+            }
+        }
+    }
+    
+    // Exams
+    if (fgets(line, sizeof(line), f)) {
+        int ecount = 0;
+        sscanf(line, "EXAMS %d", &ecount);
+        if (ecount < 0) ecount = 0;
+        if (ecount > 20) ecount = 20;
+        off->exam_count = ecount;
+        for (int e = 0; e < ecount; e++) {
+            if (!fgets(line, sizeof(line), f)) break;
+            line[strcspn(line, "\n")] = 0;
+            strncpy(off->exams[e].exam_id, line, 9);
+            
+            if (!fgets(line, sizeof(line), f)) break;
+            line[strcspn(line, "\n")] = 0;
+            strncpy(off->exams[e].title, line, 99);
+            
+            if (!fgets(line, sizeof(line), f)) break;
+            off->exams[e].max_score = (float)atof(line);
+            
+            if (!fgets(line, sizeof(line), f)) break;
+            off->exams[e].question_count = atoi(line);
+            if (off->exams[e].question_count > 10) off->exams[e].question_count = 10;
+            
+            for (int q = 0; q < off->exams[e].question_count; q++) {
+                if (!fgets(line, sizeof(line), f)) break;
+                off->exams[e].question_types[q] = atoi(line);
+                
+                if (!fgets(line, sizeof(line), f)) break;
+                line[strcspn(line, "\n")] = 0;
+                strncpy(off->exams[e].questions[q], line, 499);
+                
+                if (off->exams[e].question_types[q] == 0) {
+                    for (int o = 0; o < 4; o++) {
+                        if (!fgets(line, sizeof(line), f)) break;
+                        line[strcspn(line, "\n")] = 0;
+                        strncpy(off->exams[e].options[q][o], line, 99);
+                    }
+                    if (!fgets(line, sizeof(line), f)) break;
+                    off->exams[e].correct_answers[q] = atoi(line);
+                } else {
+                    if (!fgets(line, sizeof(line), f)) break;
+                    line[strcspn(line, "\n")] = 0;
+                    strncpy(off->exams[e].model_answers[q], line, 499);
+                }
+            }
+        }
+    }
+    fclose(f);
+}
+
 void faculty_publish_assignment(Offering* off) {
     if (!is_class_exam_time()) {
         printf("Class & exam period is not active!\n");
@@ -1961,10 +2117,15 @@ void faculty_publish_assignment(Offering* off) {
     }
     
     int idx = off->assignment_count;
+    if (idx >= 20) {
+        printf("Maximum assignments reached.\n");
+        return;
+    }
     sprintf(off->assignments[idx].assignment_id, "A%d", idx + 1);
     get_input("Assignment title: ", off->assignments[idx].title, 100);
     off->assignments[idx].max_score = (float)get_int("Max score: ");
     off->assignments[idx].question_count = get_int("Number of questions: ");
+    if (off->assignments[idx].question_count > 10) off->assignments[idx].question_count = 10;
     
     for (int q = 0; q < off->assignments[idx].question_count && q < 10; q++) {
         printf("Question %d:\n", q + 1);
@@ -1978,7 +2139,8 @@ void faculty_publish_assignment(Offering* off) {
     }
     off->assignment_count++;
     save_offerings();
-    printf("Assignment published successfully!\n");
+    save_lms_for_offering(off);
+    printf("Assignment published successfully! (ID: %s)\n", off->assignments[idx].assignment_id);
 }
 
 void faculty_publish_exam(Offering* off) {
@@ -1993,10 +2155,15 @@ void faculty_publish_exam(Offering* off) {
     }
     
     int idx = off->exam_count;
+    if (idx >= 20) {
+        printf("Maximum exams reached.\n");
+        return;
+    }
     sprintf(off->exams[idx].exam_id, "E%d", idx + 1);
     get_input("Exam title: ", off->exams[idx].title, 100);
     off->exams[idx].max_score = (float)get_int("Max score: ");
     off->exams[idx].question_count = get_int("Number of questions: ");
+    if (off->exams[idx].question_count > 10) off->exams[idx].question_count = 10;
     
     for (int q = 0; q < off->exams[idx].question_count && q < 10; q++) {
         printf("Question %d:\n", q + 1);
@@ -2016,18 +2183,31 @@ void faculty_publish_exam(Offering* off) {
     }
     off->exam_count++;
     save_offerings();
-    printf("Exam published successfully!\n");
+    save_lms_for_offering(off);
+    printf("Exam published successfully! (ID: %s)\n", off->exams[idx].exam_id);
 }
 
 void student_submit_assignment(Student* student) {
+    char oid_input[20];
+    get_input("Enter offering ID (e.g. O1 or 1): ", oid_input, 20);
     char oid[10];
-    get_input("Enter offering ID: ", oid, 10);
+    if (oid_input[0] == 'O' || oid_input[0] == 'o') {
+        snprintf(oid, sizeof(oid), "O%s", oid_input + 1);
+    } else {
+        int num = atoi(oid_input);
+        if (num > 0) snprintf(oid, sizeof(oid), "O%d", num);
+        else strcpy(oid, oid_input);
+    }
+    
+    // Force reload LMS data
+    load_offerings();
     Offering* off = find_offering(oid);
     if (!off) {
-        printf("Offering not found.\n");
+        printf("Offering not found (tried '%s').\n", oid);
         wait_for_key();
         return;
     }
+    load_lms_for_offering(off);
     
     int enrolled = 0;
     for (int i = 0; i < student->enrollment_count; i++) {
@@ -2042,12 +2222,18 @@ void student_submit_assignment(Student* student) {
         return;
     }
     
-    printf("\nAssignments:\n");
+    if (off->assignment_count == 0) {
+        printf("No assignments published for this offering yet.\n");
+        wait_for_key();
+        return;
+    }
+    
+    printf("\nAssignments for %s:\n", oid);
     for (int i = 0; i < off->assignment_count; i++) {
         printf("%d. %s (Max: %.1f)\n", i + 1, off->assignments[i].title, off->assignments[i].max_score);
     }
     
-    int choice = get_int("Select assignment: ") - 1;
+    int choice = get_int("Select assignment number: ") - 1;
     if (choice < 0 || choice >= off->assignment_count) {
         printf("Invalid choice.\n");
         wait_for_key();
@@ -2092,14 +2278,25 @@ void student_submit_assignment(Student* student) {
 }
 
 void student_submit_exam(Student* student) {
+    char oid_input[20];
+    get_input("Enter offering ID (e.g. O1 or 1): ", oid_input, 20);
     char oid[10];
-    get_input("Enter offering ID: ", oid, 10);
+    if (oid_input[0] == 'O' || oid_input[0] == 'o') {
+        snprintf(oid, sizeof(oid), "O%s", oid_input + 1);
+    } else {
+        int num = atoi(oid_input);
+        if (num > 0) snprintf(oid, sizeof(oid), "O%d", num);
+        else strcpy(oid, oid_input);
+    }
+    
+    load_offerings();
     Offering* off = find_offering(oid);
     if (!off) {
-        printf("Offering not found.\n");
+        printf("Offering not found (tried '%s').\n", oid);
         wait_for_key();
         return;
     }
+    load_lms_for_offering(off);
     
     int enrolled = 0;
     for (int i = 0; i < student->enrollment_count; i++) {
@@ -2114,12 +2311,19 @@ void student_submit_exam(Student* student) {
         return;
     }
     
-    printf("\nExams:\n");
-    for (int i = 0; i < off->exam_count; i++) {
-        printf("%d. %s (Max: %.1f)\n", i + 1, off->exams[i].title, off->exams[i].max_score);
+    if (off->exam_count == 0) {
+        printf("No exams published for this offering yet.\n");
+        wait_for_key();
+        return;
     }
     
-    int choice = get_int("Select exam: ") - 1;
+    printf("\nExams for %s:\n", oid);
+    for (int i = 0; i < off->exam_count; i++) {
+        printf("%d. %s (Max: %.1f) [ID: %s]\n", 
+            i + 1, off->exams[i].title, off->exams[i].max_score, off->exams[i].exam_id);
+    }
+    
+    int choice = get_int("Select exam number: ") - 1;
     if (choice < 0 || choice >= off->exam_count) {
         printf("Invalid choice.\n");
         wait_for_key();
