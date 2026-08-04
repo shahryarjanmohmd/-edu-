@@ -1,2 +1,1 @@
-#include <stdio.h>
-// PLACEHOLDER - will use full content via alternative method
+see previous - loading full
