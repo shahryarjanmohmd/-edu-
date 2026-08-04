@@ -1261,7 +1261,14 @@ void admin_requests() {
                 printf("Course: %s (%s)\n", requests[i].course_name, requests[i].course_id);
                 printf("Faculty: %s (%s)\n", requests[i].faculty_name, requests[i].faculty_id);
                 printf("Semester: %s\n", requests[i].semester);
-                printf("Capacity: %d\n", requests[i].capacity);
+                if (strcmp(requests[i].type, "increase_capacity") == 0) {
+                    Offering* tmp = find_offering(requests[i].offering_id);
+                    int current_cap = tmp ? tmp->capacity : -1;
+                    printf("Current Capacity: %d\n", current_cap);
+                    printf("Requested Capacity: %d\n", requests[i].capacity);
+                } else {
+                    printf("Capacity: %d\n", requests[i].capacity);
+                }
                 printf("Location: %s\n", requests[i].location);
                 printf("Offering ID: %s\n", requests[i].offering_id);
                 printf("Status: %s\n", requests[i].status);
@@ -1296,16 +1303,24 @@ void admin_requests() {
             
             Offering* off = find_offering(requests[idx].offering_id);
             if (off != NULL) {
-                strcpy(off->status, "approved");
-                save_offerings();
-                printf("✓ Offering %s approved!\n", requests[idx].offering_id);
-            }
-            // Handle remove_course type
-            if (strcmp(requests[idx].type, "remove_course") == 0 && off != NULL) {
-                // mark for removal or remove
-                strcpy(off->status, "removed");
-                save_offerings();
-                printf("✓ Offering %s marked as removed!\n", requests[idx].offering_id);
+                if (strcmp(requests[idx].type, "remove_course") == 0) {
+                    strcpy(off->status, "removed");
+                    save_offerings();
+                    printf("✓ Offering %s marked as removed!\n", requests[idx].offering_id);
+                }
+                else if (strcmp(requests[idx].type, "increase_capacity") == 0) {
+                    int old_cap = off->capacity;
+                    off->capacity = requests[idx].capacity;  // apply requested capacity
+                    save_offerings();
+                    printf("✓ Capacity of %s increased from %d to %d!\n", 
+                        requests[idx].offering_id, old_cap, off->capacity);
+                }
+                else {
+                    // offer_course or default
+                    strcpy(off->status, "approved");
+                    save_offerings();
+                    printf("✓ Offering %s approved!\n", requests[idx].offering_id);
+                }
             }
             save_requests();
             printf("✓ Request #%d approved.\n", num);
@@ -1320,11 +1335,19 @@ void admin_requests() {
                 if (off != NULL) {
                     if (strcmp(requests[idx].type, "remove_course") == 0) {
                         strcpy(off->status, "removed");
-                    } else {
+                        printf("✓ Offering %s removed!\n", requests[idx].offering_id);
+                    }
+                    else if (strcmp(requests[idx].type, "increase_capacity") == 0) {
+                        int old_cap = off->capacity;
+                        off->capacity = requests[idx].capacity;
+                        printf("✓ Capacity of %s: %d -> %d\n", 
+                            requests[idx].offering_id, old_cap, off->capacity);
+                    }
+                    else {
                         strcpy(off->status, "approved");
+                        printf("✓ Offering %s approved!\n", requests[idx].offering_id);
                     }
                     save_offerings();
-                    printf("✓ Offering %s processed!\n", requests[idx].offering_id);
                 }
             }
             save_requests();
@@ -1341,14 +1364,20 @@ void admin_requests() {
             int idx = pending_indices[num - 1];
             strcpy(requests[idx].status, "rejected");
             
-            Offering* off = find_offering(requests[idx].offering_id);
-            if (off != NULL) {
-                strcpy(off->status, "rejected");
-                save_offerings();
-                printf("✓ Offering %s rejected!\n", requests[idx].offering_id);
+            // For reject: only reject offer_course (set status rejected). 
+            // For increase_capacity / remove_course just mark request rejected, don't change offering.
+            if (strcmp(requests[idx].type, "offer_course") == 0) {
+                Offering* off = find_offering(requests[idx].offering_id);
+                if (off != NULL) {
+                    strcpy(off->status, "rejected");
+                    save_offerings();
+                    printf("✓ Offering %s rejected!\n", requests[idx].offering_id);
+                }
+            } else {
+                printf("✓ Request #%d (%s) rejected. No change applied.\n", 
+                    num, requests[idx].type);
             }
             save_requests();
-            printf("✓ Request #%d rejected.\n", num);
             wait_for_key();
         }
     } while(option != 4);
@@ -2112,13 +2141,31 @@ void student_offerings(Student* student) {
                 wait_for_key();
                 continue;
             }
+            char oid_input[20];
+            get_input("Enter Offering ID or number (e.g. O1 or 1) to enroll: ", oid_input, 20);
+            
+            // Normalize: accept "1", "01", "O1", "o1"
             char oid[10];
-            get_input("Enter Offering ID (e.g. O1) to enroll: ", oid, 10);
+            if (oid_input[0] == 'O' || oid_input[0] == 'o') {
+                // already has O prefix
+                snprintf(oid, sizeof(oid), "O%s", oid_input + 1);
+            } else {
+                // just a number → prefix with O
+                // remove leading zeros
+                int num = atoi(oid_input);
+                if (num > 0) {
+                    snprintf(oid, sizeof(oid), "O%d", num);
+                } else {
+                    strcpy(oid, oid_input);
+                }
+            }
+            
             load_students();
             load_offerings();
             Offering* off = find_offering(oid);
             if (!off) { 
-                printf("Offering not found. Make sure you enter the Offering ID (like O1), not the Course ID.\n"); 
+                printf("Offering not found (tried '%s').\n", oid);
+                printf("Tip: Look at the 'off ID' column in the list (e.g. O1).\n");
                 wait_for_key(); 
                 continue; 
             }
@@ -2166,12 +2213,30 @@ void student_offerings(Student* student) {
             wait_for_key();
         }
         else if (option == 3) {
+            char oid_input[20];
+            get_input("Enter Offering ID or number (e.g. O1 or 1) to withdraw: ", oid_input, 20);
+            
+            // Normalize: accept "1", "01", "O1", "o1"
             char oid[10];
-            get_input("Enter Offering ID (e.g. O1) to withdraw: ", oid, 10);
+            if (oid_input[0] == 'O' || oid_input[0] == 'o') {
+                snprintf(oid, sizeof(oid), "O%s", oid_input + 1);
+            } else {
+                int num = atoi(oid_input);
+                if (num > 0) {
+                    snprintf(oid, sizeof(oid), "O%d", num);
+                } else {
+                    strcpy(oid, oid_input);
+                }
+            }
+            
             load_students();
             load_offerings();
             Offering* off = find_offering(oid);
-            if (!off) { printf("Offering not found.\n"); wait_for_key(); continue; }
+            if (!off) { 
+                printf("Offering not found (tried '%s').\n", oid); 
+                wait_for_key(); 
+                continue; 
+            }
             for (int i = 0; i < off->enrolled_count; i++) {
                 if (strcmp(off->student_ids[i], student->student_id) == 0) {
                     for (int j = i; j < off->enrolled_count - 1; j++) {
@@ -2502,9 +2567,48 @@ void faculty_my_offerings(Faculty* faculty) {
                 return;
             }
             int extra = get_int("Enter extra capacity: ");
-            off->capacity += extra;
-            save_offerings();
-            printf("Capacity increased to %d.\n", off->capacity);
+            if (extra <= 0) {
+                printf("Extra capacity must be positive.\n");
+                wait_for_key();
+                return;
+            }
+            // According to project: capacity increase must be approved by admin
+            // Store requested capacity temporarily in a request
+            load_requests();
+            if (request_count >= MAX_REQUESTS) {
+                printf("Request queue is full!\n");
+                wait_for_key();
+                return;
+            }
+            Request req;
+            memset(&req, 0, sizeof(Request));
+            req.id = request_count + 1;
+            strcpy(req.offering_id, off->offering_id);
+            strcpy(req.course_id, off->course_id);
+            strcpy(req.faculty_id, off->faculty_id);
+            strcpy(req.semester, off->semester);
+            req.capacity = off->capacity + extra;  // requested new capacity
+            strcpy(req.location, off->location);
+            strcpy(req.status, "pending");
+            strcpy(req.type, "increase_capacity");
+            
+            Faculty* f = find_faculty_by_id(off->faculty_id);
+            if (f) {
+                snprintf(req.faculty_name, sizeof(req.faculty_name), "%s %s", f->first_name, f->last_name);
+            } else {
+                strcpy(req.faculty_name, "Unknown");
+            }
+            Course* c2 = find_course(off->course_id);
+            if (c2) {
+                strcpy(req.course_name, c2->course_name);
+            } else {
+                strcpy(req.course_name, "Unknown");
+            }
+            
+            requests[request_count++] = req;
+            save_requests();
+            printf("Capacity increase request sent to admin (from %d to %d).\n", off->capacity, off->capacity + extra);
+            printf("It will be applied after admin approval.\n");
             wait_for_key();
         }
         else if (sub == 2) {
