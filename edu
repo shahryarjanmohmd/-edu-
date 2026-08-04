@@ -1557,7 +1557,8 @@ void admin_offerings() {
         printf("\n1. Search\n");
         printf("2. Add student to an offering\n");
         printf("3. Remove student from an offering\n");
-        printf("4. Go back\n");
+        printf("4. Increase capacity (admin direct)\n");
+        printf("5. Go back\n");
         printf("Enter an option: ");
         scanf("%d", &option);
         clear_input();
@@ -1665,7 +1666,30 @@ void admin_offerings() {
             printf("Student removed.\n");
             wait_for_key();
         }
-    } while(option != 4);
+        else if (option == 4) {
+            // Admin can directly increase capacity (project requirement)
+            char oid[10];
+            get_input("Enter offering ID: ", oid, 10);
+            load_offerings();
+            Offering* off = find_offering(oid);
+            if (!off) {
+                printf("Offering not found.\n");
+                wait_for_key();
+                continue;
+            }
+            printf("Current capacity: %d | Enrolled: %d\n", off->capacity, off->enrolled_count);
+            int extra = get_int("Enter capacity to add: ");
+            if (extra <= 0) {
+                printf("Must be positive.\n");
+                wait_for_key();
+                continue;
+            }
+            off->capacity += extra;
+            save_offerings();
+            printf("Capacity increased to %d.\n", off->capacity);
+            wait_for_key();
+        }
+    } while(option != 5);
 }
 
 void admin_courses() {
@@ -3336,13 +3360,13 @@ int main() {
     load_offerings();
     load_requests();
     
-    // Enable calendar by default
-    calendar.offering_enabled = 1;
-    calendar.unit_selection_enabled = 1;
-    calendar.class_exam_enabled = 1;
-    calendar.grade_recording_enabled = 1;
-    calendar.survey_enabled = 1;
-    calendar.current_phase = 0;
+    // Calendar starts disabled (admin must enable phases in order)
+    calendar.offering_enabled = 0;
+    calendar.unit_selection_enabled = 0;
+    calendar.class_exam_enabled = 0;
+    calendar.grade_recording_enabled = 0;
+    calendar.survey_enabled = 0;
+    calendar.current_phase = -1;
     
     login();
     
