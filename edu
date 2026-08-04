@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -357,39 +358,75 @@ void load_students() {
     
     fscanf(f, "%d\n", &student_count);
     for (int i = 0; i < student_count; i++) {
-        fscanf(f, "%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%[^,],%d,%[^,],%f,%d\n",
-            students[i].student_id,
-            students[i].username,
-            students[i].password,
-            students[i].first_name,
-            students[i].last_name,
-            students[i].national_id,
-            students[i].major,
-            students[i].entry_year,
-            students[i].level,
-            students[i].advisor,
-            students[i].faculty,
-            students[i].birthplace,
-            students[i].first_school,
-            students[i].first_book,
-            students[i].first_bicycle_color,
-            students[i].thesis_title,
-            students[i].thesis_abstract,
-            &students[i].thesis_citations,
-            students[i].thesis_supervisor,
-            &students[i].thesis_grade,
-            &students[i].has_thesis);
         students[i].enrollment_count = 0;
         students[i].survey_count = 0;
+        memset(students[i].enrollments, 0, sizeof(students[i].enrollments));
+        memset(students[i].surveys, 0, sizeof(students[i].surveys));
+        
+        char line[2048] = {0};
+        if (fgets(line, sizeof(line), f) == NULL) break;
+        line[strcspn(line, "\n")] = '\0';
+        
+        // Parse fixed fields first
+        char* saveptr = NULL;
+        char* token = strtok_r(line, ",", &saveptr);
+        int field = 0;
+        while (token != NULL && field < 21) {
+            switch(field) {
+                case 0: strncpy(students[i].student_id, token, 19); break;
+                case 1: strncpy(students[i].username, token, 49); break;
+                case 2: strncpy(students[i].password, token, 49); break;
+                case 3: strncpy(students[i].first_name, token, 49); break;
+                case 4: strncpy(students[i].last_name, token, 49); break;
+                case 5: strncpy(students[i].national_id, token, 19); break;
+                case 6: strncpy(students[i].major, token, 49); break;
+                case 7: strncpy(students[i].entry_year, token, 9); break;
+                case 8: strncpy(students[i].level, token, 19); break;
+                case 9: strncpy(students[i].advisor, token, 49); break;
+                case 10: strncpy(students[i].faculty, token, 49); break;
+                case 11: strncpy(students[i].birthplace, token, 99); break;
+                case 12: strncpy(students[i].first_school, token, 99); break;
+                case 13: strncpy(students[i].first_book, token, 99); break;
+                case 14: strncpy(students[i].first_bicycle_color, token, 49); break;
+                case 15: strncpy(students[i].thesis_title, token, 199); break;
+                case 16: strncpy(students[i].thesis_abstract, token, 499); break;
+                case 17: students[i].thesis_citations = atoi(token); break;
+                case 18: strncpy(students[i].thesis_supervisor, token, 49); break;
+                case 19: students[i].thesis_grade = (float)atof(token); break;
+                case 20: students[i].has_thesis = atoi(token); break;
+            }
+            token = strtok_r(NULL, ",", &saveptr);
+            field++;
+        }
+        
+        // Remaining tokens are enrollments: ENR:oid:grade
+        int ecount = 0;
+        while (token != NULL && ecount < MAX_ENROLLMENTS) {
+            if (strncmp(token, "ENR:", 4) == 0) {
+                char oid[10] = {0};
+                float grade = 0;
+                if (sscanf(token + 4, "%9[^:]:%f", oid, &grade) >= 1) {
+                    strcpy(students[i].enrollments[ecount].offering_id, oid);
+                    students[i].enrollments[ecount].grade = grade;
+                    ecount++;
+                }
+            }
+            token = strtok_r(NULL, ",", &saveptr);
+        }
+        students[i].enrollment_count = ecount;
     }
     fclose(f);
 }
 
 void save_students() {
     FILE* f = fopen("students.json", "w");
+    if (!f) {
+        printf("ERROR: Cannot open students.json for writing!\n");
+        return;
+    }
     fprintf(f, "%d\n", student_count);
     for (int i = 0; i < student_count; i++) {
-        fprintf(f, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,%s,%f,%d\n",
+        fprintf(f, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,%s,%f,%d",
             students[i].student_id,
             students[i].username,
             students[i].password,
@@ -411,6 +448,16 @@ void save_students() {
             students[i].thesis_supervisor,
             students[i].thesis_grade,
             students[i].has_thesis);
+        
+        // Append enrollments
+        for (int j = 0; j < students[i].enrollment_count && j < MAX_ENROLLMENTS; j++) {
+            if (strlen(students[i].enrollments[j].offering_id) > 0) {
+                fprintf(f, ",ENR:%s:%.2f", 
+                    students[i].enrollments[j].offering_id,
+                    students[i].enrollments[j].grade);
+            }
+        }
+        fprintf(f, "\n");
     }
     fclose(f);
 }
@@ -578,32 +625,103 @@ void load_offerings() {
         return;
     }
     
-    fscanf(f, "%d\n", &offering_count);
+    char line[4096];
+    if (fgets(line, sizeof(line), f) == NULL) {
+        offering_count = 0;
+        fclose(f);
+        return;
+    }
+    offering_count = atoi(line);
+    if (offering_count < 0 || offering_count > MAX_OFFERINGS) offering_count = 0;
+    
     for (int i = 0; i < offering_count; i++) {
-        fscanf(f, "%[^,],%[^,],%[^,],%[^,],%d,%d,%[^,],%[^\n]\n",
-            offerings[i].offering_id,
-            offerings[i].course_id,
-            offerings[i].faculty_id,
-            offerings[i].semester,
-            &offerings[i].capacity,
-            &offerings[i].enrolled_count,
-            offerings[i].location,
-            offerings[i].status);
-        offerings[i].enrolled_count = 0;
-        offerings[i].assignment_count = 0;
-        offerings[i].exam_count = 0;
+        memset(&offerings[i], 0, sizeof(Offering));
+        
+        if (fgets(line, sizeof(line), f) == NULL) {
+            offering_count = i;
+            break;
+        }
+        line[strcspn(line, "\n")] = '\0';
+        
+        // Parse: oid,course_id,faculty_id,semester,capacity,enrolled_count,location,status|sid:grade|...
+        char* saveptr = NULL;
+        char* token = strtok_r(line, ",", &saveptr);
+        int field = 0;
+        char* enroll_part = NULL;
+        
+        while (token != NULL && field < 8) {
+            // status field may contain |enrollments
+            if (field == 7) {
+                char* pipe = strchr(token, '|');
+                if (pipe) {
+                    *pipe = '\0';
+                    enroll_part = pipe + 1;
+                }
+                strncpy(offerings[i].status, token, 19);
+            } else {
+                switch(field) {
+                    case 0: strncpy(offerings[i].offering_id, token, 9); break;
+                    case 1: strncpy(offerings[i].course_id, token, 9); break;
+                    case 2: strncpy(offerings[i].faculty_id, token, 19); break;
+                    case 3: strncpy(offerings[i].semester, token, 9); break;
+                    case 4: offerings[i].capacity = atoi(token); break;
+                    case 5: offerings[i].enrolled_count = atoi(token); break;
+                    case 6: strncpy(offerings[i].location, token, 99); break;
+                }
+            }
+            token = strtok_r(NULL, ",", &saveptr);
+            field++;
+        }
+        
+        // Parse enrollments from enroll_part or remaining tokens that start with |
+        int ecount = 0;
+        if (enroll_part && strlen(enroll_part) > 0) {
+            char* etok = strtok(enroll_part, "|");
+            while (etok != NULL && ecount < 100) {
+                char sid[20] = {0};
+                float grade = 0;
+                if (sscanf(etok, "%19[^:]:%f", sid, &grade) >= 1 && strlen(sid) > 0) {
+                    strcpy(offerings[i].student_ids[ecount], sid);
+                    offerings[i].grades[ecount] = grade;
+                    ecount++;
+                }
+                etok = strtok(NULL, "|");
+            }
+        }
+        // Also check if more comma-separated tokens exist that look like enrollments
+        while (token != NULL && ecount < 100) {
+            if (token[0] == '|') token++;
+            char sid[20] = {0};
+            float grade = 0;
+            if (sscanf(token, "%19[^:]:%f", sid, &grade) >= 1 && strlen(sid) > 0) {
+                strcpy(offerings[i].student_ids[ecount], sid);
+                offerings[i].grades[ecount] = grade;
+                ecount++;
+            }
+            token = strtok_r(NULL, ",", &saveptr);
+        }
+        
+        if (ecount > 0) {
+            offerings[i].enrolled_count = ecount;
+        }
+        if (offerings[i].enrolled_count < 0) offerings[i].enrolled_count = 0;
+        if (offerings[i].enrolled_count > 100) offerings[i].enrolled_count = 100;
     }
     fclose(f);
 }
 
 void save_offerings() {
     FILE* f = fopen("offerings.json", "w");
+    if (!f) {
+        printf("ERROR: Cannot open offerings.json for writing!\n");
+        return;
+    }
     fprintf(f, "%d\n", offering_count);
     for (int i = 0; i < offering_count; i++) {
         if (strlen(offerings[i].offering_id) == 0) {
             sprintf(offerings[i].offering_id, "O%d", i + 1);
         }
-        fprintf(f, "%s,%s,%s,%s,%d,%d,%s,%s\n",
+        fprintf(f, "%s,%s,%s,%s,%d,%d,%s,%s",
             offerings[i].offering_id,
             offerings[i].course_id,
             offerings[i].faculty_id,
@@ -612,6 +730,14 @@ void save_offerings() {
             offerings[i].enrolled_count,
             offerings[i].location,
             offerings[i].status);
+        
+        // Append enrolled students: |sid1:grade1|sid2:grade2|...
+        for (int j = 0; j < offerings[i].enrolled_count && j < 100; j++) {
+            if (strlen(offerings[i].student_ids[j]) > 0) {
+                fprintf(f, "|%s:%.2f", offerings[i].student_ids[j], offerings[i].grades[j]);
+            }
+        }
+        fprintf(f, "\n");
     }
     fclose(f);
 }
