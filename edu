@@ -2027,9 +2027,13 @@ void student_offerings(Student* student) {
         load_faculty();
         
         printf("\nList of offerings - %s\n", semester);
-        printf("| %-6s | %-30s | %-10s | %-20s | %-8s | %-8s | %-20s | %-20s | %-20s |\n",
-            "number", "course name", "course id", "faculty name", "semester", "capacity", "no. enrollments", "department", "place");
-        printf("--------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("| %-6s | %-8s | %-30s | %-10s | %-20s | %-8s | %-8s | %-12s | %-15s | %-20s |\n",
+            "number", "off ID", "course name", "course id", "faculty name", "semester", "capacity", "enrolled", "department", "place");
+        printf("--------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+        
+        // Keep mapping of displayed number -> offering_id for easier enrollment
+        char displayed_oids[200][10];
+        int displayed_count = 0;
         
         int num = 1;
         for (int i = 0; i < offering_count; i++) {
@@ -2037,16 +2041,24 @@ void student_offerings(Student* student) {
                 strcmp(offerings[i].status, "approved") == 0) {
                 Course* c = find_course(offerings[i].course_id);
                 Faculty* f = find_faculty_by_id(offerings[i].faculty_id);
-                printf("| %-6d | %-30s | %-10s | %-20s | %-8s | %-8d | %-20d | %-20s | %-20s |\n",
-                    num++,
+                char fname[50] = "";
+                if (f) {
+                    snprintf(fname, sizeof(fname), "%s %s", f->title, f->last_name);
+                }
+                printf("| %-6d | %-8s | %-30s | %-10s | %-20s | %-8s | %-8d | %-12d | %-15s | %-20s |\n",
+                    num,
+                    offerings[i].offering_id,
                     c ? c->course_name : "Unknown",
                     c ? c->course_id : "Unknown",
-                    f ? f->title : "",
+                    fname,
                     offerings[i].semester,
                     offerings[i].capacity,
                     offerings[i].enrolled_count,
                     c ? c->department : "Unknown",
                     offerings[i].location);
+                strcpy(displayed_oids[displayed_count], offerings[i].offering_id);
+                displayed_count++;
+                num++;
             }
         }
         
@@ -2062,22 +2074,28 @@ void student_offerings(Student* student) {
             char keyword[50];
             get_input("Enter search keyword: ", keyword, 50);
             printf("\nSearch results for '%s':\n", keyword);
-            printf("| %-6s | %-30s | %-10s | %-20s | %-8s | %-8s | %-20s | %-20s | %-20s |\n",
-                "number", "course name", "course id", "faculty name", "semester", "capacity", "no. enrollments", "department", "place");
-            printf("--------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+            printf("| %-6s | %-8s | %-30s | %-10s | %-20s | %-8s | %-8s | %-12s | %-15s | %-20s |\n",
+                "number", "off ID", "course name", "course id", "faculty name", "semester", "capacity", "enrolled", "department", "place");
+            printf("--------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
             int num2 = 1;
             for (int i = 0; i < offering_count; i++) {
                 if (strcmp(offerings[i].semester, semester) == 0 && 
                     strcmp(offerings[i].status, "approved") == 0) {
                     Course* c = find_course(offerings[i].course_id);
                     if (strstr(c ? c->course_name : "", keyword) || 
-                        strstr(offerings[i].course_id, keyword)) {
+                        strstr(offerings[i].course_id, keyword) ||
+                        strstr(offerings[i].offering_id, keyword)) {
                         Faculty* f = find_faculty_by_id(offerings[i].faculty_id);
-                        printf("| %-6d | %-30s | %-10s | %-20s | %-8s | %-8d | %-20d | %-20s | %-20s |\n",
+                        char fname[50] = "";
+                        if (f) {
+                            snprintf(fname, sizeof(fname), "%s %s", f->title, f->last_name);
+                        }
+                        printf("| %-6d | %-8s | %-30s | %-10s | %-20s | %-8s | %-8d | %-12d | %-15s | %-20s |\n",
                             num2++,
+                            offerings[i].offering_id,
                             c ? c->course_name : "Unknown",
                             c ? c->course_id : "Unknown",
-                            f ? f->title : "",
+                            fname,
                             offerings[i].semester,
                             offerings[i].capacity,
                             offerings[i].enrolled_count,
@@ -2095,11 +2113,15 @@ void student_offerings(Student* student) {
                 continue;
             }
             char oid[10];
-            get_input("Enter offering ID to enroll: ", oid, 10);
+            get_input("Enter Offering ID (e.g. O1) to enroll: ", oid, 10);
             load_students();
             load_offerings();
             Offering* off = find_offering(oid);
-            if (!off) { printf("Offering not found.\n"); wait_for_key(); continue; }
+            if (!off) { 
+                printf("Offering not found. Make sure you enter the Offering ID (like O1), not the Course ID.\n"); 
+                wait_for_key(); 
+                continue; 
+            }
             if (strcmp(off->status, "approved") != 0) {
                 printf("This offering is not approved yet.\n");
                 wait_for_key();
@@ -2140,12 +2162,12 @@ void student_offerings(Student* student) {
             student->enrollment_count++;
             save_students();
             save_offerings();
-            printf("Enrolled successfully.\n");
+            printf("Enrolled successfully in %s (%s).\n", c ? c->course_name : oid, oid);
             wait_for_key();
         }
         else if (option == 3) {
             char oid[10];
-            get_input("Enter offering ID to withdraw: ", oid, 10);
+            get_input("Enter Offering ID (e.g. O1) to withdraw: ", oid, 10);
             load_students();
             load_offerings();
             Offering* off = find_offering(oid);
