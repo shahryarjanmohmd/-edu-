@@ -960,94 +960,61 @@ void print_calendar() {
 }
 
 void trigger_time(int phase) {
-    if (phase == 1) {
-        if (calendar.unit_selection_enabled || calendar.class_exam_enabled || 
-            calendar.grade_recording_enabled || calendar.survey_enabled) {
-            printf("Cannot enable offering while later phases are active!\n");
-            return;
-        }
-        calendar.offering_enabled = !calendar.offering_enabled;
-        if (calendar.offering_enabled) {
-            calendar.unit_selection_enabled = 0;
-            calendar.class_exam_enabled = 0;
-            calendar.grade_recording_enabled = 0;
-            calendar.survey_enabled = 0;
-            calendar.current_phase = 0;
-        }
-    } else if (phase == 2) {
-        if (!calendar.offering_enabled) {
-            printf("Cannot enable unit selection before offering!\n");
-            return;
-        }
-        if (calendar.class_exam_enabled || calendar.grade_recording_enabled || calendar.survey_enabled) {
-            printf("Cannot enable unit selection while later phases are active!\n");
-            return;
-        }
-        calendar.unit_selection_enabled = !calendar.unit_selection_enabled;
-        if (calendar.unit_selection_enabled) {
-            calendar.class_exam_enabled = 0;
-            calendar.grade_recording_enabled = 0;
-            calendar.survey_enabled = 0;
-            calendar.current_phase = 1;
-        } else {
-            calendar.offering_enabled = 0;
-            calendar.current_phase = -1;
-        }
-    } else if (phase == 3) {
-        if (!calendar.unit_selection_enabled) {
-            printf("Cannot enable class/exam before unit selection!\n");
-            return;
-        }
-        if (calendar.grade_recording_enabled || calendar.survey_enabled) {
-            printf("Cannot enable class/exam while later phases are active!\n");
-            return;
-        }
-        calendar.class_exam_enabled = !calendar.class_exam_enabled;
-        if (calendar.class_exam_enabled) {
-            calendar.grade_recording_enabled = 0;
-            calendar.survey_enabled = 0;
-            calendar.current_phase = 2;
-        } else {
-            calendar.unit_selection_enabled = 0;
-            calendar.offering_enabled = 0;
-            calendar.current_phase = -1;
-        }
-    } else if (phase == 4) {
-        if (!calendar.class_exam_enabled) {
-            printf("Cannot enable grade recording before class/exam!\n");
-            return;
-        }
-        if (calendar.survey_enabled) {
-            printf("Cannot enable grade recording while survey is active!\n");
-            return;
-        }
-        calendar.grade_recording_enabled = !calendar.grade_recording_enabled;
-        if (calendar.grade_recording_enabled) {
-            calendar.survey_enabled = 0;
-            calendar.current_phase = 3;
-        } else {
-            calendar.class_exam_enabled = 0;
-            calendar.unit_selection_enabled = 0;
-            calendar.offering_enabled = 0;
-            calendar.current_phase = -1;
-        }
-    } else if (phase == 5) {
-        if (!calendar.grade_recording_enabled) {
-            printf("Cannot enable survey before grade recording!\n");
-            return;
-        }
-        calendar.survey_enabled = !calendar.survey_enabled;
-        if (!calendar.survey_enabled) {
-            calendar.grade_recording_enabled = 0;
-            calendar.class_exam_enabled = 0;
-            calendar.unit_selection_enabled = 0;
-            calendar.offering_enabled = 0;
-            calendar.current_phase = -1;
-        } else {
-            calendar.current_phase = 4;
-        }
+    // Phases: 1=offering, 2=unit selection, 3=class&exams, 4=grade recording, 5=survey
+    // Both enable and disable go TOP -> BOTTOM, one-by-one:
+    //  - Enable  i : upper phase (i-1) must already be ENABLED
+    //  - Disable i : upper phase (i-1) must already be DISABLED
+    //    (phase 1 has no upper → can always enable/disable)
+    //  - Only the selected phase is toggled (no cascade)
+
+    int* phases[5] = {
+        &calendar.offering_enabled,
+        &calendar.unit_selection_enabled,
+        &calendar.class_exam_enabled,
+        &calendar.grade_recording_enabled,
+        &calendar.survey_enabled
+    };
+    const char* names[5] = {
+        "offering",
+        "unit selection",
+        "class & exams",
+        "grade recording",
+        "survey"
+    };
+
+    if (phase < 1 || phase > 5) {
+        printf("Invalid phase.\n");
+        return;
     }
-    printf("Phase toggled.\n");
+
+    int idx = phase - 1;
+    int currently_on = *(phases[idx]);
+
+    if (!currently_on) {
+        // ENABLE: upper must be enabled
+        if (idx > 0 && !*(phases[idx - 1])) {
+            printf("Cannot enable %s: upper phase (%s) must be enabled first.\n",
+                names[idx], names[idx - 1]);
+            return;
+        }
+        *(phases[idx]) = 1;
+        calendar.current_phase = idx;
+        printf("%s enabled.\n", names[idx]);
+    } else {
+        // DISABLE: upper must be disabled first (order from top)
+        if (idx > 0 && *(phases[idx - 1])) {
+            printf("Cannot disable %s: upper phase (%s) must be disabled first.\n",
+                names[idx], names[idx - 1]);
+            printf("Disable phases from top to bottom.\n");
+            return;
+        }
+        *(phases[idx]) = 0;
+        calendar.current_phase = -1;
+        for (int i = 0; i < 5; i++) {
+            if (*(phases[i])) calendar.current_phase = i;
+        }
+        printf("%s disabled.\n", names[idx]);
+    }
 }
 
 int is_offering_time() { return calendar.offering_enabled; }
