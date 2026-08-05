@@ -401,10 +401,11 @@ void load_students() {
             field++;
         }
         
-        // Remaining tokens are enrollments: ENR:oid:grade
+        // Remaining tokens: ENR:oid:grade  or  SURV:oid:rating:comment
         int ecount = 0;
-        while (token != NULL && ecount < MAX_ENROLLMENTS) {
-            if (strncmp(token, "ENR:", 4) == 0) {
+        int scount = 0;
+        while (token != NULL) {
+            if (strncmp(token, "ENR:", 4) == 0 && ecount < MAX_ENROLLMENTS) {
                 char oid[10] = {0};
                 float grade = 0;
                 if (sscanf(token + 4, "%9[^:]:%f", oid, &grade) >= 1) {
@@ -412,10 +413,22 @@ void load_students() {
                     students[i].enrollments[ecount].grade = grade;
                     ecount++;
                 }
+            } else if (strncmp(token, "SURV:", 5) == 0 && scount < MAX_ENROLLMENTS) {
+                char oid[10] = {0};
+                int rating = 0;
+                char comment[200] = {0};
+                // format: SURV:O1:8:some comment text
+                if (sscanf(token + 5, "%9[^:]:%d:%199[^\n]", oid, &rating, comment) >= 2) {
+                    strcpy(students[i].surveys[scount].offering_id, oid);
+                    students[i].surveys[scount].rating = rating;
+                    strncpy(students[i].surveys[scount].comment, comment, 199);
+                    scount++;
+                }
             }
             token = strtok_r(NULL, ",", &saveptr);
         }
         students[i].enrollment_count = ecount;
+        students[i].survey_count = scount;
     }
     fclose(f);
 }
@@ -457,6 +470,21 @@ void save_students() {
                 fprintf(f, ",ENR:%s:%.2f", 
                     students[i].enrollments[j].offering_id,
                     students[i].enrollments[j].grade);
+            }
+        }
+        // Append surveys: SURV:offering_id:rating:comment (comment with spaces replaced by _)
+        for (int j = 0; j < students[i].survey_count && j < MAX_ENROLLMENTS; j++) {
+            if (strlen(students[i].surveys[j].offering_id) > 0) {
+                char safe_comment[200];
+                strncpy(safe_comment, students[i].surveys[j].comment, 199);
+                safe_comment[199] = '\0';
+                for (int k = 0; safe_comment[k]; k++) {
+                    if (safe_comment[k] == ',' || safe_comment[k] == '\n') safe_comment[k] = ' ';
+                }
+                fprintf(f, ",SURV:%s:%d:%s",
+                    students[i].surveys[j].offering_id,
+                    students[i].surveys[j].rating,
+                    safe_comment);
             }
         }
         fprintf(f, "\n");
@@ -1863,11 +1891,20 @@ void student_survey(Student* student) {
         }
     }
     
+    char oid_input[20];
+    get_input("Enter offering ID to rate (e.g. O1 or 1): ", oid_input, 20);
     char oid[10];
-    get_input("Enter offering ID to rate: ", oid, 10);
+    if (oid_input[0] == 'O' || oid_input[0] == 'o') {
+        snprintf(oid, sizeof(oid), "O%s", oid_input + 1);
+    } else {
+        int num = atoi(oid_input);
+        if (num > 0) snprintf(oid, sizeof(oid), "O%d", num);
+        else strcpy(oid, oid_input);
+    }
+    
     Offering* off = find_offering(oid);
     if (!off) {
-        printf("Offering not found.\n");
+        printf("Offering not found (tried '%s').\n", oid);
         wait_for_key();
         return;
     }
@@ -1905,16 +1942,28 @@ void student_survey(Student* student) {
     get_input("Comment (optional): ", student->surveys[student->survey_count].comment, 200);
     student->survey_count++;
     save_students();
-    printf("Survey submitted successfully!\n");
+    printf("Survey submitted successfully for %s!\n", oid);
     wait_for_key();
 }
 
 void faculty_view_surveys(Faculty* faculty) {
+    char oid_input[20];
+    get_input("Enter offering ID (e.g. O1 or 1): ", oid_input, 20);
     char oid[10];
-    get_input("Enter offering ID: ", oid, 10);
+    if (oid_input[0] == 'O' || oid_input[0] == 'o') {
+        snprintf(oid, sizeof(oid), "O%s", oid_input + 1);
+    } else {
+        int num = atoi(oid_input);
+        if (num > 0) snprintf(oid, sizeof(oid), "O%d", num);
+        else strcpy(oid, oid_input);
+    }
+    
+    // Reload students so surveys from disk are visible
+    load_students();
+    
     Offering* off = find_offering(oid);
     if (!off) {
-        printf("Offering not found.\n");
+        printf("Offering not found (tried '%s').\n", oid);
         wait_for_key();
         return;
     }
