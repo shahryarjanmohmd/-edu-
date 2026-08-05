@@ -6,6 +6,7 @@
 #include <time.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <math.h>
 
 // ================ DEFINES ================
 #define MAX_STUDENTS 1000
@@ -237,6 +238,21 @@ void wait_for_key() {
     getchar();
     clear_input();
 }
+
+// Case-insensitive substring search (for Search features)
+char* stristr(const char* haystack, const char* needle) {
+    if (!haystack || !needle || !*needle) return (char*)haystack;
+    for (const char* h = haystack; *h; h++) {
+        const char* a = h;
+        const char* b = needle;
+        while (*a && *b && (tolower((unsigned char)*a) == tolower((unsigned char)*b))) {
+            a++; b++;
+        }
+        if (!*b) return (char*)h;
+    }
+    return NULL;
+}
+
 
 void print_header() {
     printf("\n========================================\n");
@@ -1132,10 +1148,10 @@ void admin_students() {
                 printf("\nSearch results (Full details):\n");
                 for (int i = 0; i < student_count; i++) {
                     int match = 0;
-                    if (search_by == 1 && strstr(students[i].first_name, keyword)) match = 1;
-                    else if (search_by == 2 && strstr(students[i].last_name, keyword)) match = 1;
-                    else if (search_by == 3 && strstr(students[i].student_id, keyword)) match = 1;
-                    else if (search_by == 4 && strstr(students[i].national_id, keyword)) match = 1;
+                    if (search_by == 1 && stristr(students[i].first_name, keyword)) match = 1;
+                    else if (search_by == 2 && stristr(students[i].last_name, keyword)) match = 1;
+                    else if (search_by == 3 && stristr(students[i].student_id, keyword)) match = 1;
+                    else if (search_by == 4 && stristr(students[i].national_id, keyword)) match = 1;
                     if (match) {
                         printf("\n========================================\n");
                         printf("Student ID     : %s\n", students[i].student_id);
@@ -1304,11 +1320,11 @@ void admin_faculty() {
                 get_input("Enter search keyword: ", keyword, 50);
                 printf("\nSearch results (Full details):\n");
                 for (int i = 0; i < faculty_count; i++) {
-                    if (strstr(faculties[i].first_name, keyword) || 
-                        strstr(faculties[i].last_name, keyword) ||
-                        strstr(faculties[i].faculty_id, keyword) ||
-                        strstr(faculties[i].username, keyword) ||
-                        strstr(faculties[i].national_id, keyword)) {
+                    if (stristr(faculties[i].first_name, keyword) || 
+                        stristr(faculties[i].last_name, keyword) ||
+                        stristr(faculties[i].faculty_id, keyword) ||
+                        stristr(faculties[i].username, keyword) ||
+                        stristr(faculties[i].national_id, keyword)) {
                         printf("\n========================================\n");
                         printf("Faculty ID   : %s\n", faculties[i].faculty_id);
                         printf("Username     : %s\n", faculties[i].username);
@@ -1569,9 +1585,9 @@ void admin_offerings() {
             for (int i = 0; i < offering_count; i++) {
                 if (strcmp(offerings[i].semester, semester) == 0) {
                     Course* c = find_course(offerings[i].course_id);
-                    if (c && (strstr(c->course_name, keyword) || 
-                        strstr(offerings[i].course_id, keyword) ||
-                        strstr(offerings[i].offering_id, keyword))) {
+                    if (c && (stristr(c->course_name, keyword) || 
+                        stristr(offerings[i].course_id, keyword) ||
+                        stristr(offerings[i].offering_id, keyword))) {
                         Faculty* f = find_faculty_by_id(offerings[i].faculty_id);
                         printf("| %-6d | %-30s | %-10s | %-15s | %-8s | %-8d | %-20d | %-20s | %-20s |\n",
                             num2++,
@@ -1619,7 +1635,7 @@ void admin_offerings() {
             off->grades[off->enrolled_count] = 0;
             off->enrolled_count++;
             strcpy(s->enrollments[s->enrollment_count].offering_id, oid);
-            s->enrollments[s->enrollment_count].grade = 0;
+            s->enrollments[s->enrollment_count].grade = -1;
             s->enrollment_count++;
             save_students();
             save_offerings();
@@ -1722,8 +1738,8 @@ void admin_courses() {
                 "course name", "course id", "units", "prerequisites", "section", "field", "department");
             printf("------------------------------------------------------------------------------------------------------------------------\n");
             for (int i = 0; i < course_count; i++) {
-                if (strstr(courses[i].course_name, keyword) || 
-                    strstr(courses[i].course_id, keyword)) {
+                if (stristr(courses[i].course_name, keyword) || 
+                    stristr(courses[i].course_id, keyword)) {
                     printf("| %-20s | %-10s | %-5d | %-30s | %-10s | %-25s | %-20s |\n",
                         courses[i].course_name,
                         courses[i].course_id,
@@ -1976,16 +1992,19 @@ void faculty_view_surveys(Faculty* faculty) {
     printf("\nSurvey Results\n");
     printf("Course: %s\n", off->offering_id);
     
-    int total = 0, sum = 0;
+    int ratings[500];
+    int total = 0;
+    long sum = 0;
     for (int i = 0; i < student_count; i++) {
         for (int j = 0; j < students[i].survey_count; j++) {
             if (strcmp(students[i].surveys[j].offering_id, oid) == 0) {
+                int r = students[i].surveys[j].rating;
+                if (total < 500) ratings[total] = r;
                 total++;
-                sum += students[i].surveys[j].rating;
+                sum += r;
                 printf("- %s %s: Rating=%d, Comment=%s\n", 
                     students[i].first_name, students[i].last_name,
-                    students[i].surveys[j].rating,
-                    students[i].surveys[j].comment);
+                    r, students[i].surveys[j].comment);
             }
         }
     }
@@ -1993,8 +2012,46 @@ void faculty_view_surveys(Faculty* faculty) {
     if (total == 0) {
         printf("No surveys submitted yet.\n");
     } else {
-        printf("\nAverage Rating: %.2f\n", (float)sum / total);
+        // Sort for quartiles
+        int n = total < 500 ? total : 500;
+        for (int i = 0; i < n - 1; i++) {
+            for (int j = i + 1; j < n; j++) {
+                if (ratings[j] < ratings[i]) {
+                    int t = ratings[i]; ratings[i] = ratings[j]; ratings[j] = t;
+                }
+            }
+        }
+        double mean = (double)sum / total;
+        double variance = 0;
+        for (int i = 0; i < n; i++) {
+            double d = ratings[i] - mean;
+            variance += d * d;
+        }
+        double stdev = (n > 1) ? sqrt(variance / (n - 1)) : 0;
+        // Quartiles (simple rank method)
+        int q1 = ratings[n / 4];
+        int q2 = ratings[n / 2];
+        int q3 = ratings[(3 * n) / 4];
+        
+        printf("\n=== Survey Analysis (Bonus) ===\n");
         printf("Total Responses: %d\n", total);
+        printf("Mean (Average):  %.2f\n", mean);
+        printf("Std Deviation:   %.2f\n", stdev);
+        printf("Q1 (1st quartile): %d\n", q1);
+        printf("Q2 (Median):       %d\n", q2);
+        printf("Q3 (3rd quartile): %d\n", q3);
+        
+        // Simple text histogram chart (1-10)
+        printf("\nChart (rating frequency):\n");
+        int freq[11] = {0};
+        for (int i = 0; i < n; i++) {
+            if (ratings[i] >= 1 && ratings[i] <= 10) freq[ratings[i]]++;
+        }
+        for (int r = 1; r <= 10; r++) {
+            printf("%2d | ", r);
+            for (int k = 0; k < freq[r]; k++) printf("#");
+            printf(" (%d)\n", freq[r]);
+        }
     }
     wait_for_key();
 }
@@ -2481,9 +2538,9 @@ void student_offerings(Student* student) {
                 if (strcmp(offerings[i].semester, semester) == 0 && 
                     strcmp(offerings[i].status, "approved") == 0) {
                     Course* c = find_course(offerings[i].course_id);
-                    if (strstr(c ? c->course_name : "", keyword) || 
-                        strstr(offerings[i].course_id, keyword) ||
-                        strstr(offerings[i].offering_id, keyword)) {
+                    if (stristr(c ? c->course_name : "", keyword) || 
+                        stristr(offerings[i].course_id, keyword) ||
+                        stristr(offerings[i].offering_id, keyword)) {
                         Faculty* f = find_faculty_by_id(offerings[i].faculty_id);
                         char fname[50] = "";
                         if (f) {
@@ -2575,7 +2632,7 @@ void student_offerings(Student* student) {
             off->grades[off->enrolled_count] = 0;
             off->enrolled_count++;
             strcpy(student->enrollments[student->enrollment_count].offering_id, oid);
-            student->enrollments[student->enrollment_count].grade = 0;
+            student->enrollments[student->enrollment_count].grade = -1;
             student->enrollment_count++;
             save_students();
             save_offerings();
@@ -2635,8 +2692,19 @@ void student_offerings(Student* student) {
 }
 
 void student_report_card(Student* student) {
+    // Reload from disk so grades recorded by faculty appear
+    char sid_copy[20];
+    strcpy(sid_copy, student->student_id);
+
     int option;
     do {
+        load_students();
+        student = find_student_by_id(sid_copy);
+        if (!student) {
+            printf("Student not found.\n");
+            return;
+        }
+
         printf("\nStudent: Report Card\n");
         printf("| %-12s | %-20s |\n", "student id", student->student_id);
         printf("| %-12s | %-20s |\n", "first name", student->first_name);
@@ -2648,14 +2716,17 @@ void student_report_card(Student* student) {
         printf("| %-12s | %-20s |\n", "mentor", student->advisor);
         printf("| %-12s | %-20s |\n", "department", student->faculty);
         
+        // Overall GPA â€” only recorded grades; pass threshold >= 10
         float total_grade = 0;
         int total_units = 0;
         for (int i = 0; i < student->enrollment_count; i++) {
+            float g = student->enrollments[i].grade;
+            if (g < 0) continue;
             Offering* off = find_offering(student->enrollments[i].offering_id);
             if (off) {
                 Course* c = find_course(off->course_id);
                 if (c) {
-                    total_grade += student->enrollments[i].grade * c->units;
+                    total_grade += g * c->units;
                     total_units += c->units;
                 }
             }
@@ -2664,7 +2735,7 @@ void student_report_card(Student* student) {
             total_grade += student->thesis_grade * 6;
             total_units += 6;
         }
-        printf("| %-12s | %-20.2f |\n", "GPA", total_units > 0 ? total_grade / total_units : 0);
+        printf("| %-12s | %-20.2f |\n", "GPA", total_units > 0 ? total_grade / total_units : 0.0);
         
         printf("\n1. Go to semester\n");
         printf("2. Go back\n");
@@ -2678,6 +2749,9 @@ void student_report_card(Student* student) {
             load_courses();
             load_faculty();
             load_offerings();
+            load_students();
+            student = find_student_by_id(sid_copy);
+            if (!student) continue;
             
             printf("\nReport card - %s %s - %s\n", student->first_name, student->last_name, semester);
             printf("| %-20s | %-10s | %-5s | %-6s | %-6s | %-20s |\n", 
@@ -2694,25 +2768,43 @@ void student_report_card(Student* student) {
                     Course* c = find_course(off->course_id);
                     Faculty* f = find_faculty_by_id(off->faculty_id);
                     float grade = student->enrollments[i].grade;
-                    int is_passed = grade >= 10.0;
-                    if (is_passed) passed++;
-                    else failed++;
                     enrolled++;
                     
-                    printf("| %-20s | %-10s | %-5d | %-6.2f | %-6s | %-20s |\n",
+                    // Fallback: grade stored on offering side
+                    if (grade < 0) {
+                        for (int k = 0; k < off->enrolled_count; k++) {
+                            if (strcmp(off->student_ids[k], student->student_id) == 0) {
+                                grade = off->grades[k];
+                                break;
+                            }
+                        }
+                    }
+                    
+                    char grade_str[16], passed_str[8], instructor[40] = "";
+                    if (grade < 0) {
+                        strcpy(grade_str, "-");
+                        strcpy(passed_str, "-");
+                    } else {
+                        snprintf(grade_str, sizeof(grade_str), "%.2f", grade);
+                        int is_passed = (grade >= 10.0f);
+                        strcpy(passed_str, is_passed ? "Yes" : "No");
+                        if (is_passed) passed++; else failed++;
+                        if (c) {
+                            total_grade_sem += grade * c->units;
+                            total_units_sem += c->units;
+                        }
+                    }
+                    if (f) snprintf(instructor, sizeof(instructor), "%s %s", f->title, f->last_name);
+                    
+                    printf("| %-20s | %-10s | %-5d | %-6s | %-6s | %-20s |\n",
                         c ? c->course_name : "Unknown",
                         c ? c->course_id : "Unknown",
                         c ? c->units : 0,
-                        grade,
-                        is_passed ? "Yes" : "No",
-                        f ? f->title : "");
-                    
-                    if (c) { total_grade_sem += grade * c->units; total_units_sem += c->units; }
+                        grade_str, passed_str, instructor);
                 }
             }
             
-            if (student->has_thesis && student->thesis_grade >= 0 && 
-                strcmp(semester, student->entry_year) == 0) {
+            if (student->has_thesis && student->thesis_grade >= 0) {
                 printf("| %-20s | %-10s | %-5s | %-6.2f | %-6s | %-20s |\n", 
                     "Thesis", "THESIS", "6", student->thesis_grade, "Yes", "Supervisor");
                 total_grade_sem += student->thesis_grade * 6;
@@ -2724,7 +2816,7 @@ void student_report_card(Student* student) {
             printf("\nEnrolled courses: %d\n", enrolled);
             printf("Passed courses: %d\n", passed);
             printf("Failed courses: %d\n", failed);
-            printf("GPA: %.2f\n", total_units_sem > 0 ? total_grade_sem / total_units_sem : 0);
+            printf("Semester GPA: %.2f\n", total_units_sem > 0 ? total_grade_sem / total_units_sem : 0.0);
             wait_for_key();
         }
     } while(option != 2);
@@ -2770,8 +2862,8 @@ void student_menu(Student* student) {
                     printf("| %-20s | %-10s | %-5s | %-20s |\n", "Course Name", "Course ID", "Units", "Level");
                     printf("--------------------------------------------------------------------\n");
                     for (int i = 0; i < course_count; i++) {
-                        if (strstr(courses[i].course_name, keyword) || 
-                            strstr(courses[i].course_id, keyword)) {
+                        if (stristr(courses[i].course_name, keyword) || 
+                            stristr(courses[i].course_id, keyword)) {
                             printf("| %-20s | %-10s | %-5d | %-20s |\n",
                                 courses[i].course_name,
                                 courses[i].course_id,
@@ -3127,9 +3219,9 @@ void faculty_my_offerings(Faculty* faculty) {
         for (int i = 0; i < offering_count; i++) {
             if (strcmp(offerings[i].faculty_id, faculty->faculty_id) == 0) {
                 Course* c = find_course(offerings[i].course_id);
-                if (strstr(c ? c->course_name : "", keyword) || 
-                    strstr(offerings[i].course_id, keyword) ||
-                    strstr(offerings[i].offering_id, keyword)) {
+                if (stristr(c ? c->course_name : "", keyword) || 
+                    stristr(offerings[i].course_id, keyword) ||
+                    stristr(offerings[i].offering_id, keyword)) {
                     printf("| %-6d | %-30s | %-10s | %-10s | %-8s | %-8d | %-20d | %-20s | %-20s |\n",
                         num2++,
                         c ? c->course_name : "Unknown",
@@ -3204,9 +3296,9 @@ void faculty_menu(Faculty* faculty) {
                     for (int i = 0; i < offering_count; i++) {
                         if (strcmp(offerings[i].semester, semester) == 0) {
                             Course* c = find_course(offerings[i].course_id);
-                            if (strstr(c ? c->course_name : "", keyword) || 
-                                strstr(offerings[i].course_id, keyword) ||
-                                strstr(offerings[i].offering_id, keyword)) {
+                            if (stristr(c ? c->course_name : "", keyword) || 
+                                stristr(offerings[i].course_id, keyword) ||
+                                stristr(offerings[i].offering_id, keyword)) {
                                 printf("| %-6d | %-30s | %-10s | %-10s | %-8s | %-8d | %-20d | %-20s | %-20s |\n",
                                     num2++,
                                     c ? c->course_name : "Unknown",
@@ -3248,8 +3340,8 @@ void faculty_menu(Faculty* faculty) {
                         "Course Name", "Course ID", "Units", "Level", "Department");
                     printf("--------------------------------------------------------------------------------\n");
                     for (int i = 0; i < course_count; i++) {
-                        if (strstr(courses[i].course_name, keyword) || 
-                            strstr(courses[i].course_id, keyword)) {
+                        if (stristr(courses[i].course_name, keyword) || 
+                            stristr(courses[i].course_id, keyword)) {
                             printf("| %-20s | %-10s | %-5d | %-20s | %-20s |\n",
                                 courses[i].course_name,
                                 courses[i].course_id,
